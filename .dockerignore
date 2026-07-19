@@ -1,0 +1,9 @@
+node_modules
+client/dist
+.git
+.kleron
+.env
+.env.*
+*.log
+README.md
+docker-compose.yml

@@ -1,0 +1,158 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useColorMode } from '@vueuse/core'
+import {
+  formatUptime,
+  pickMetric,
+  pickServerName,
+  useDashboard,
+} from '../composables/useDashboard'
+import PlayersPanel from '../components/PlayersPanel.vue'
+import LogPanel from '../components/LogPanel.vue'
+import ActionsPanel from '../components/ActionsPanel.vue'
+import SettingsPanel from '../components/SettingsPanel.vue'
+
+const dash = useDashboard()
+
+const serverName = computed(() => pickServerName(dash.info.value, dash.settingsIni.value))
+const fps = computed(() => pickMetric(dash.metrics.value, 'serverfps', 'serverFPS'))
+const uptime = computed(() => formatUptime(pickMetric(dash.metrics.value, 'uptime', 'uptime')))
+const playerCount = computed(() => {
+  const fromMetrics = pickMetric(dash.metrics.value, 'currentplayernum', 'currentPlayerNum')
+  if (fromMetrics != null) return fromMetrics
+  return dash.players.value.length
+})
+const maxPlayers = computed(() => {
+  const fromMetrics = pickMetric(dash.metrics.value, 'maxplayernum', 'maxPlayerNum')
+  if (fromMetrics != null) return fromMetrics
+  return dash.settingsIni.value?.maxPlayers ?? null
+})
+const version = computed(() => dash.info.value?.version || '—')
+const baseCount = computed(() => pickMetric(dash.metrics.value, 'basecampnum', 'basecampNum'))
+
+const lastUpdated = computed(() => {
+  if (!dash.updatedAt.value) return 'Waiting…'
+  return new Date(dash.updatedAt.value).toLocaleTimeString()
+})
+
+const colorMode = useColorMode()
+const isDark = computed({
+  get: () => colorMode.value === 'dark',
+  set: (v: boolean) => {
+    colorMode.value = v ? 'dark' : 'light'
+  },
+})
+</script>
+
+<template>
+  <div class="mx-auto flex min-h-screen max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <header class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <p class="text-sm font-medium tracking-wide text-muted uppercase">Homelab</p>
+        <h1 class="mt-1 text-3xl font-semibold tracking-tight text-highlighted sm:text-4xl">
+          Palworld
+        </h1>
+        <p class="mt-1 text-sm text-muted">
+          Live ops dashboard · last update {{ lastUpdated }}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <UBadge
+          :color="dash.connected.value ? 'success' : 'warning'"
+          variant="subtle"
+          size="lg"
+        >
+          {{ dash.connected.value ? 'SSE live' : 'SSE reconnecting' }}
+        </UBadge>
+        <UBadge
+          :color="dash.palworldReachable.value ? 'success' : 'error'"
+          variant="solid"
+          size="lg"
+        >
+          {{ dash.palworldReachable.value ? 'Server online' : 'Server offline' }}
+        </UBadge>
+        <UButton
+          :icon="isDark ? 'i-lucide-moon' : 'i-lucide-sun'"
+          color="neutral"
+          variant="ghost"
+          square
+          @click="isDark = !isDark"
+        />
+      </div>
+    </header>
+
+    <UAlert
+      v-if="dash.error.value"
+      color="error"
+      variant="subtle"
+      icon="i-lucide-unplug"
+      title="Cannot reach Palworld REST API"
+      :description="dash.error.value"
+    />
+
+    <UAlert
+      v-if="dash.notice.value"
+      color="info"
+      variant="subtle"
+      icon="i-lucide-info"
+      :title="dash.notice.value"
+      :close="{ onClick: () => { dash.notice.value = null } }"
+    />
+
+    <!-- Status strip -->
+    <section class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
+        <p class="text-xs text-muted uppercase">Server</p>
+        <p class="mt-1 truncate text-lg font-medium">{{ serverName }}</p>
+        <p class="text-xs text-muted">v{{ version }}</p>
+      </div>
+      <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
+        <p class="text-xs text-muted uppercase">Players</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums">
+          {{ playerCount }}<span v-if="maxPlayers != null" class="text-base text-muted"> / {{ maxPlayers }}</span>
+        </p>
+      </div>
+      <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
+        <p class="text-xs text-muted uppercase">FPS</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums">{{ fps ?? '—' }}</p>
+      </div>
+      <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
+        <p class="text-xs text-muted uppercase">Uptime</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums">{{ uptime }}</p>
+      </div>
+      <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
+        <p class="text-xs text-muted uppercase">Bases</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums">{{ baseCount ?? '—' }}</p>
+      </div>
+    </section>
+
+    <div class="grid gap-6 lg:grid-cols-5">
+      <div class="flex flex-col gap-6 lg:col-span-3">
+        <PlayersPanel :players="dash.players.value" />
+        <ActionsPanel
+          :busy="dash.actionBusy.value"
+          :error="dash.actionError.value"
+          :disabled="!dash.palworldReachable.value"
+          @announce="dash.announce"
+          @save="dash.saveWorld"
+        />
+      </div>
+      <div class="flex flex-col gap-6 lg:col-span-2">
+        <LogPanel
+          :logs="dash.logs"
+          :paused="dash.logPaused.value"
+          @pause="dash.setPaused(true)"
+          @resume="dash.setPaused(false)"
+          @clear="dash.clearLogs"
+        />
+      </div>
+    </div>
+
+    <SettingsPanel :api="dash.settingsApi.value" :ini="dash.settingsIni.value" />
+
+    <footer class="pb-4 text-center text-xs text-muted">
+      Palworld Dashboard · LAN / Tailscale · admin password never leaves the server
+    </footer>
+  </div>
+</template>

@@ -1,0 +1,55 @@
+/** Shared live cache + SSE fan-out */
+
+const clients = new Set()
+
+export const state = {
+  palworldReachable: false,
+  error: null,
+  info: null,
+  metrics: null,
+  players: [],
+  settings: null,
+  iniSummary: null,
+  updatedAt: null,
+  logBuffer: [],
+}
+
+export function broadcast(event, data) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`
+  for (const client of clients) {
+    try {
+      client.write(payload)
+    } catch {
+      clients.delete(client)
+    }
+  }
+}
+
+export function addSseClient(reply) {
+  clients.add(reply.raw)
+  return () => clients.delete(reply.raw)
+}
+
+export function snapshotForClient() {
+  return {
+    status: {
+      palworldReachable: state.palworldReachable,
+      error: state.error,
+    },
+    server: {
+      info: state.info,
+      metrics: state.metrics,
+      ts: state.updatedAt,
+    },
+    players: {
+      players: state.players,
+      ts: state.updatedAt,
+    },
+    settings: {
+      api: state.settings,
+      ini: state.iniSummary,
+      ts: state.updatedAt,
+    },
+    logs: state.logBuffer,
+  }
+}
