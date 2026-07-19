@@ -3,6 +3,7 @@ dist/
 client/dist/
 .env
 .env.local
+local-logs/
 *.log
 .DS_Store
 .vite/
