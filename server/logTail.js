@@ -1,5 +1,5 @@
-import { watch, open, stat } from 'node:fs/promises'
-import { createReadStream } from 'node:fs'
+import { open, stat } from 'node:fs/promises'
+import { createReadStream, watch } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
 import { config } from './config.js'
@@ -153,7 +153,7 @@ export function stopLogTail() {
   if (followTimer) clearInterval(followTimer)
   followTimer = null
   if (watcher) {
-    watcher.close().catch(() => {})
+    watcher.close()
     watcher = null
   }
 }
