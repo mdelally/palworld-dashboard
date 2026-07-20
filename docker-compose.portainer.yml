@@ -1,0 +1,36 @@
+services:
+  palworld-dashboard:
+    image: ghcr.io/mdelally/palworld-dashboard:latest
+    container_name: palworld-dashboard
+    ports:
+      - "8787:8787"
+    environment:
+      PALWORLD_API_URL: ${PALWORLD_API_URL:-http://172.17.0.1:8212}
+      PALWORLD_API_USER: ${PALWORLD_API_USER:-admin}
+      PALWORLD_API_PASSWORD: ${PALWORLD_API_PASSWORD:-changeme}
+      PALWORLD_LOG_PATH: /data/logs
+      PALWORLD_CONFIG_PATH: /data/PalWorldSettings.ini
+      DASHBOARD_PORT: 8787
+      DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
+      POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
+    volumes:
+      # Adjust these host paths to your Palworld server appdata
+      - /mnt/user/appdata/palworld/Pal/Saved/Logs:/data/logs:ro
+      - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:ro
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Auto-updates any container labelled watchtower.enable=true when its
+  # image tag changes upstream. Remove this service if you run a single
+  # Watchtower elsewhere on the host, or prefer manual re-pulls in Portainer.
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"
+    restart: unless-stopped
