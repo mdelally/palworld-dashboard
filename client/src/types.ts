@@ -54,3 +54,15 @@ export interface BanEntry {
   reason: string | null
   ts: number
 }
+
+export interface ConfigFile {
+  path: string
+  content: string
+  mtime: number | null
+}
+
+export interface ConfigBackup {
+  name: string
+  size: number
+  mtime: number
+}

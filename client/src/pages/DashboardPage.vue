@@ -11,6 +11,7 @@ import PlayersPanel from '../components/PlayersPanel.vue'
 import BansPanel from '../components/BansPanel.vue'
 import LogPanel from '../components/LogPanel.vue'
 import ActionsPanel from '../components/ActionsPanel.vue'
+import ConfigEditorPanel from '../components/ConfigEditorPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 const dash = useDashboard()
@@ -207,6 +208,16 @@ const isDark = computed({
         />
       </div>
     </div>
+
+    <ConfigEditorPanel
+      :has-token="!!dash.dashboardToken.value"
+      :dark="isDark"
+      :load="dash.loadConfig"
+      :save="dash.saveConfig"
+      :list-backups="dash.loadConfigBackups"
+      :restore="dash.restoreConfig"
+      @restart="dash.restartServer"
+    />
 
     <SettingsPanel :api="dash.settingsApi.value" :ini="dash.settingsIni.value" />
 

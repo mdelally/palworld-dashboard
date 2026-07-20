@@ -13,6 +13,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     ActionsPanel: typeof import('./src/components/ActionsPanel.vue')['default']
     BansPanel: typeof import('./src/components/BansPanel.vue')['default']
+    ConfigEditorPanel: typeof import('./src/components/ConfigEditorPanel.vue')['default']
     LogPanel: typeof import('./src/components/LogPanel.vue')['default']
     PlayersPanel: typeof import('./src/components/PlayersPanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

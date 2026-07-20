@@ -1,5 +1,14 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
-import type { BanEntry, IniSummary, LogEntry, Player, ServerInfo, ServerMetrics } from '../types'
+import type {
+  BanEntry,
+  ConfigBackup,
+  ConfigFile,
+  IniSummary,
+  LogEntry,
+  Player,
+  ServerInfo,
+  ServerMetrics,
+} from '../types'
 
 const MAX_LOG_LINES = 500
 const TOKEN_KEY = 'palworld-dashboard-token'
@@ -34,25 +43,36 @@ export function useDashboard() {
     }
   }
 
+  function unauthorizedOr(data: { error?: string }, status: number) {
+    return status === 401
+      ? 'Unauthorized — set the admin token'
+      : data.error || `Request failed (${status})`
+  }
+
   // Shared helper for all mutating requests: injects the admin token header,
   // JSON-encodes the body, and surfaces the server's error message.
-  async function mutate(path: string, body?: unknown) {
+  async function mutate(path: string, body?: unknown, method = 'POST') {
     const headers: Record<string, string> = {}
     if (body !== undefined) headers['Content-Type'] = 'application/json'
     if (dashboardToken.value) headers['x-dashboard-token'] = dashboardToken.value
     const res = await fetch(path, {
-      method: 'POST',
+      method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      const msg =
-        res.status === 401
-          ? 'Unauthorized — set the admin token'
-          : data.error || `Request failed (${res.status})`
-      throw new Error(msg)
-    }
+    if (!res.ok) throw new Error(unauthorizedOr(data, res.status))
+    return data
+  }
+
+  // Token-aware GET for admin-only reads (the raw ini exposes secrets, so its
+  // read routes are token-guarded too).
+  async function getJson(path: string) {
+    const headers: Record<string, string> = {}
+    if (dashboardToken.value) headers['x-dashboard-token'] = dashboardToken.value
+    const res = await fetch(path, { headers })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(unauthorizedOr(data, res.status))
     return data
   }
 
@@ -181,6 +201,29 @@ export function useDashboard() {
     })
   }
 
+  // --- Settings .ini editor (Phase 2) ---------------------------------------
+  // These return data (not fire-and-forget), so the ConfigEditorPanel owns its
+  // own loading/error state rather than the shared actionBusy flag.
+  function loadConfig(): Promise<ConfigFile> {
+    return getJson('/api/config') as Promise<ConfigFile>
+  }
+
+  function saveConfig(
+    content: string,
+  ): Promise<{ ok: true; backup: string | null; mtime: number | null }> {
+    return mutate('/api/config', { content }, 'PUT')
+  }
+
+  function loadConfigBackups(): Promise<{ backups: ConfigBackup[] }> {
+    return getJson('/api/config/backups') as Promise<{ backups: ConfigBackup[] }>
+  }
+
+  function restoreConfig(
+    name: string,
+  ): Promise<{ ok: true; restored: string; backup: string | null }> {
+    return mutate('/api/config/restore', { name })
+  }
+
   onMounted(() => connect())
   onUnmounted(() => {
     es?.close()
@@ -213,6 +256,10 @@ export function useDashboard() {
     banPlayer,
     unbanPlayer,
     restartServer,
+    loadConfig,
+    saveConfig,
+    loadConfigBackups,
+    restoreConfig,
   }
 }
 
