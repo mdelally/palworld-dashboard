@@ -38,8 +38,13 @@ services:
       # Writable state owned by the dashboard (local banlist). Persists across
       # restarts and image updates.
       - palworld-dashboard-data:/data
-      # Adjust this host path to your Palworld appdata (needed for the .ini editor).
-      - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:ro
+      # Adjust this host path to your Palworld appdata. Mounted :rw because the
+      # in-dashboard config editor writes PalWorldSettings.ini in place. It's a
+      # single-file mount, so backups can't live beside it on the host — they're
+      # written into the /data volume above (config-backups/) and are restorable
+      # from the UI. Requires a container UID that can write the file (this stack
+      # runs as root; see the `user:` note above).
+      - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:rw
     # Redundant while user is root (root can already reach the socket); kept for
     # anyone who switches back to a non-root user. Find it: getent group docker
     group_add:
