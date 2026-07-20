@@ -3,6 +3,13 @@ import { palworld } from './palworld.js'
 import { state, addSseClient, snapshotForClient, broadcast } from './state.js'
 import { listBans, addBan, removeBan } from './banlist.js'
 import { restartContainer } from './dockerControl.js'
+import {
+  readConfigFile,
+  writeConfigFile,
+  listConfigBackups,
+  restoreConfigBackup,
+} from './configFile.js'
+import { refreshIni } from './poller.js'
 
 function validUserId(value) {
   return typeof value === 'string' && value.trim().length > 0
@@ -182,6 +189,70 @@ export async function registerRoutes(app) {
       return { ok: true }
     } catch (err) {
       return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  // --- Settings .ini editor ------------------------------------------------
+  // All four are token-guarded: the raw ini contains the admin/server
+  // passwords in plaintext, and PUT/restore are arbitrary config writes.
+  // NOTE: like the other mutating routes, these are open when DASHBOARD_TOKEN
+  // is unset — set a token before exposing this beyond a trusted LAN.
+
+  app.get('/api/config', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    try {
+      return await readConfigFile()
+    } catch (err) {
+      return reply.code(err.status || 500).send({ error: err.message })
+    }
+  })
+
+  app.put('/api/config', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const content = request.body?.content
+    if (typeof content !== 'string') {
+      return reply.code(400).send({ error: 'content (string) is required' })
+    }
+    try {
+      const result = await writeConfigFile(content)
+      await refreshIni()
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: 'Config saved — restart the server to apply',
+      })
+      return { ok: true, ...result }
+    } catch (err) {
+      return reply.code(err.status || 500).send({ error: err.message })
+    }
+  })
+
+  app.get('/api/config/backups', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    try {
+      return { backups: await listConfigBackups() }
+    } catch (err) {
+      return reply.code(err.status || 500).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/config/restore', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const name = request.body?.name
+    if (typeof name !== 'string' || !name.trim()) {
+      return reply.code(400).send({ error: 'name is required' })
+    }
+    try {
+      const result = await restoreConfigBackup(name.trim())
+      await refreshIni()
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: 'Config restored — restart the server to apply',
+      })
+      return { ok: true, ...result }
+    } catch (err) {
+      return reply.code(err.status || 500).send({ error: err.message })
     }
   })
 

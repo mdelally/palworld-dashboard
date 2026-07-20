@@ -54,7 +54,10 @@ async function tick() {
   }
 }
 
-async function refreshIni() {
+// Exported so route handlers can force an immediate re-read + settings
+// broadcast right after the ini file is edited/restored, instead of waiting
+// for the 60s poll.
+export async function refreshIni() {
   try {
     state.iniSummary = await readIniSummary()
     broadcast('settings', {
