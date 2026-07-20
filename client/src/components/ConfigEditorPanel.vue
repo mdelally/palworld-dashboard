@@ -59,6 +59,7 @@ function buildState(doc: string) {
     doc,
     extensions: [
       basicSetup,
+      EditorView.lineWrapping,
       StreamLanguage.define(properties),
       themeCompartment.of(themeExt(props.dark)),
       EditorView.updateListener.of((v) => {

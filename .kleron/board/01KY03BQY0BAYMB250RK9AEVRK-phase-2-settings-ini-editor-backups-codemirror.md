@@ -14,7 +14,7 @@ dependsOn:
 effort: high
 order: 0
 created: '2026-07-20T15:47:22.176Z'
-updated: '2026-07-20T20:06:04.998Z'
+updated: '2026-07-20T21:10:16.672Z'
 ---
 Let admins view/edit `PalWorldSettings.ini` from the dashboard, with a timestamped backup taken before every write. Editor via CodeMirror.
 
