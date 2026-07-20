@@ -49,6 +49,15 @@ if (config.isProd) {
 }
 
 startPoller()
+app.log.info(
+  {
+    source: useDockerLogs
+      ? `docker:${config.palworld.container || '(unset)'}`
+      : `file:${config.palworld.logPath || '(unset)'}`,
+    logExclude: config.logExclude || '(none)',
+  },
+  'log streaming config',
+)
 startLogs().catch((err) => app.log.warn({ err }, 'log streaming failed to start'))
 
 const shutdown = async () => {

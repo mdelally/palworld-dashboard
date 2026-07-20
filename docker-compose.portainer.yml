@@ -15,6 +15,16 @@ services:
       DASHBOARD_PORT: 8787
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
+      # Log streaming + filtering. LOG_EXCLUDE is a regex; log lines matching it
+      # are dropped before they reach the dashboard (use it to hide the
+      # dashboard's own REST API poll spam). These MUST be listed here to be
+      # passed into the container — compose does not forward .env / stack vars
+      # it doesn't reference.
+      LOG_SOURCE: ${LOG_SOURCE:-auto}
+      LOG_EXCLUDE: ${LOG_EXCLUDE:-}
+      LOG_BUFFER_LINES: ${LOG_BUFFER_LINES:-500}
+      # Warning window (announce + save) before a restart takes the container down.
+      RESTART_GRACE_SECONDS: ${RESTART_GRACE_SECONDS:-10}
     volumes:
       # Read the game container's console logs and restart it. Note: :ro only
       # protects the socket inode, not API calls, so restart still works.
