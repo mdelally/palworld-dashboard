@@ -2,6 +2,11 @@ services:
   palworld-dashboard:
     build: .
     container_name: palworld-dashboard
+    # Run as root so the container can read the host appdata bind-mount
+    # (PalWorldSettings.ini, often root/0600 on Unraid) and write the /data
+    # volume (banlist). Not a meaningful downgrade here: mounting docker.sock
+    # already grants host-root-equivalent access, so the process UID is moot.
+    user: "0:0"
     ports:
       - "8787:8787"
     environment:
@@ -16,12 +21,13 @@ services:
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
       # Log streaming + filtering. LOG_EXCLUDE is a regex; log lines matching it
-      # are dropped before they reach the dashboard (use it to hide the
-      # dashboard's own REST API poll spam). These MUST be listed here to be
-      # passed into the container — compose does not forward .env / stack vars
-      # it doesn't reference.
+      # are dropped before they reach the dashboard. The default hides the
+      # dashboard's own REST poll traffic (GET /v1/api/* every POLL_INTERVAL_MS);
+      # set it to '' to see everything, or tune the pattern. NOTE: these MUST be
+      # listed here to reach the container — compose does not forward .env / stack
+      # vars it doesn't reference.
       LOG_SOURCE: ${LOG_SOURCE:-auto}
-      LOG_EXCLUDE: ${LOG_EXCLUDE:-}
+      LOG_EXCLUDE: ${LOG_EXCLUDE:-/v1/api/}
       LOG_BUFFER_LINES: ${LOG_BUFFER_LINES:-500}
       # Warning window (announce + save) before a restart takes the container down.
       RESTART_GRACE_SECONDS: ${RESTART_GRACE_SECONDS:-10}
@@ -34,8 +40,8 @@ services:
       - palworld-dashboard-data:/data
       # Adjust this host path to your Palworld appdata (needed for the .ini editor).
       - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:ro
-    # The container runs as non-root (USER node); grant it the host's docker
-    # group so it can read /var/run/docker.sock. Verify: getent group docker
+    # Redundant while user is root (root can already reach the socket); kept for
+    # anyone who switches back to a non-root user. Find it: getent group docker
     group_add:
       - "${DOCKER_GID:-999}"
     restart: unless-stopped

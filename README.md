@@ -47,6 +47,9 @@ Open http://\<unraid-ip\>:8787 (or via Tailscale).
 | `PALWORLD_CONTAINER` | `palworld` | Game container name — used for log streaming and restart |
 | `DASHBOARD_DATA_DIR` | `/data` | Writable dir for dashboard state (local banlist). Mounted as a persistent volume in Docker |
 | `RESTART_GRACE_SECONDS` | `10` | Warning window (announce + save) before a restart takes the container down |
+| `LOG_SOURCE` | `auto` | `auto`/`docker`/`file` — `auto` streams the game container's stdout when `PALWORLD_CONTAINER` is set, else tails `PALWORLD_LOG_PATH` |
+| `LOG_EXCLUDE` | `/v1/api/` | Regex; matching log lines are hidden from the panel. Default hides the dashboard's own REST poll traffic. Set empty to see all |
+| `LOG_BUFFER_LINES` | `500` | Max log lines retained and streamed to the panel |
 
 ### Unraid notes
 
