@@ -9,9 +9,14 @@ export default defineConfig({
     vue(),
     ui({
       colorMode: true,
-      theme: {
-        colors: ['primary', 'secondary', 'success', 'info', 'warning', 'error'],
-      },
+      ui: {
+      colors: {
+          primary: 'blue',
+          secondary: 'amber',
+          neutral: 'neutral',
+        },
+
+      }
     }),
   ],
   resolve: {
