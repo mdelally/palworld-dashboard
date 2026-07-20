@@ -54,4 +54,28 @@ export const palworld = {
     request('/v1/api/save', {
       method: 'POST',
     }),
+  kick: (userid, message) =>
+    request('/v1/api/kick', {
+      method: 'POST',
+      body: JSON.stringify({ userid, message }),
+    }),
+  ban: (userid, message) =>
+    request('/v1/api/ban', {
+      method: 'POST',
+      body: JSON.stringify({ userid, message }),
+    }),
+  unban: (userid) =>
+    request('/v1/api/unban', {
+      method: 'POST',
+      body: JSON.stringify({ userid }),
+    }),
+  shutdown: (waittime, message) =>
+    request('/v1/api/shutdown', {
+      method: 'POST',
+      body: JSON.stringify({ waittime, message }),
+    }),
+  stop: () =>
+    request('/v1/api/stop', {
+      method: 'POST',
+    }),
 }

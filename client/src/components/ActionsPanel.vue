@@ -10,10 +10,13 @@ const props = defineProps<{
 const emit = defineEmits<{
   announce: [message: string]
   save: []
+  restart: []
 }>()
 
 const message = ref('')
 const confirmOpen = ref(false)
+const restartOpen = ref(false)
+const restartConfirmText = ref('')
 
 function submitAnnounce() {
   const text = message.value.trim()
@@ -30,6 +33,18 @@ function requestSave() {
 function confirmSave() {
   confirmOpen.value = false
   emit('save')
+}
+
+function requestRestart() {
+  if (props.busy) return
+  restartConfirmText.value = ''
+  restartOpen.value = true
+}
+
+function confirmRestart() {
+  if (restartConfirmText.value.trim().toUpperCase() !== 'RESTART') return
+  restartOpen.value = false
+  emit('restart')
 }
 </script>
 
@@ -84,6 +99,22 @@ function confirmSave() {
           Save world
         </UButton>
       </div>
+
+      <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+        <p class="text-xs text-muted">
+          Restart announces, saves, then restarts the game container. Works even
+          when the server is unreachable.
+        </p>
+        <UButton
+          color="error"
+          variant="soft"
+          icon="i-lucide-rotate-ccw"
+          :loading="busy"
+          @click="requestRestart"
+        >
+          Restart server
+        </UButton>
+      </div>
     </div>
 
     <UModal v-model:open="confirmOpen" title="Force world save?">
@@ -99,6 +130,41 @@ function confirmSave() {
           </UButton>
           <UButton color="warning" icon="i-lucide-save" @click="confirmSave">
             Save now
+          </UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="restartOpen" title="Restart the server?">
+      <template #body>
+        <div class="flex flex-col gap-3">
+          <p class="text-sm text-muted">
+            This announces a warning, saves the world, waits the grace period,
+            then restarts the game container. All players will be disconnected.
+          </p>
+          <p class="text-sm text-muted">
+            Type <span class="font-mono font-semibold text-highlighted">RESTART</span> to confirm.
+          </p>
+          <UInput
+            v-model="restartConfirmText"
+            placeholder="RESTART"
+            autofocus
+            @keyup.enter="confirmRestart"
+          />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="ghost" @click="restartOpen = false">
+            Cancel
+          </UButton>
+          <UButton
+            color="error"
+            icon="i-lucide-rotate-ccw"
+            :disabled="restartConfirmText.trim().toUpperCase() !== 'RESTART'"
+            @click="confirmRestart"
+          >
+            Restart now
           </UButton>
         </div>
       </template>

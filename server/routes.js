@@ -1,6 +1,14 @@
 import { config } from './config.js'
 import { palworld } from './palworld.js'
 import { state, addSseClient, snapshotForClient, broadcast } from './state.js'
+import { listBans, addBan, removeBan } from './banlist.js'
+import { restartContainer } from './dockerControl.js'
+
+function validUserId(value) {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function requireToken(request, reply) {
   if (!config.dashboardToken) return true
@@ -63,6 +71,7 @@ export async function registerRoutes(app) {
     reply.raw.write(`event: server\ndata: ${JSON.stringify(snap.server)}\n\n`)
     reply.raw.write(`event: players\ndata: ${JSON.stringify(snap.players)}\n\n`)
     reply.raw.write(`event: settings\ndata: ${JSON.stringify(snap.settings)}\n\n`)
+    reply.raw.write(`event: bans\ndata: ${JSON.stringify(snap.bans)}\n\n`)
     for (const entry of snap.logs) {
       reply.raw.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`)
     }
@@ -103,6 +112,105 @@ export async function registerRoutes(app) {
         palworldReachable: state.palworldReachable,
         error: state.error,
         notice: 'World save requested',
+      })
+      return { ok: true }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.get('/api/bans', async () => ({ bans: listBans() }))
+
+  app.post('/api/kick', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const userid = request.body?.userid
+    const message = typeof request.body?.message === 'string' ? request.body.message : ''
+    if (!validUserId(userid)) {
+      return reply.code(400).send({ error: 'userid is required' })
+    }
+    try {
+      await palworld.kick(userid.trim(), message)
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: `Kicked ${message ? `player (${message})` : userid}`,
+      })
+      return { ok: true }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/ban', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const userid = request.body?.userid
+    const name = typeof request.body?.name === 'string' ? request.body.name : ''
+    const message = typeof request.body?.message === 'string' ? request.body.message : ''
+    if (!validUserId(userid)) {
+      return reply.code(400).send({ error: 'userid is required' })
+    }
+    try {
+      await palworld.ban(userid.trim(), message)
+      addBan({ userid: userid.trim(), name, reason: message })
+      broadcast('bans', { bans: listBans() })
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: `Banned ${name || userid}`,
+      })
+      return { ok: true }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/unban', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const userid = request.body?.userid
+    if (!validUserId(userid)) {
+      return reply.code(400).send({ error: 'userid is required' })
+    }
+    try {
+      await palworld.unban(userid.trim())
+      removeBan(userid.trim())
+      broadcast('bans', { bans: listBans() })
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: `Unbanned ${userid}`,
+      })
+      return { ok: true }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/restart', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const grace = Math.max(0, config.restartGraceSeconds)
+    try {
+      // Warn players, flush the world, then take the container down. The
+      // announce/save are best-effort — if the server is already unreachable
+      // we still want the restart to proceed.
+      if (grace > 0) {
+        try {
+          await palworld.announce(`Server restarting in ${grace} seconds…`)
+          await palworld.save()
+        } catch (err) {
+          request.log.warn({ err }, 'restart pre-flight announce/save failed')
+        }
+        broadcast('status', {
+          palworldReachable: state.palworldReachable,
+          error: state.error,
+          notice: `Restart requested — restarting in ${grace}s`,
+        })
+        await delay(grace * 1000)
+      }
+      await restartContainer()
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: 'Container restart issued',
       })
       return { ok: true }
     } catch (err) {

@@ -1,6 +1,7 @@
 /** Shared live cache + SSE fan-out */
 
 import { config } from './config.js'
+import { listBans } from './banlist.js'
 
 const clients = new Set()
 
@@ -79,6 +80,9 @@ export function snapshotForClient() {
       api: state.settings,
       ini: state.iniSummary,
       ts: state.updatedAt,
+    },
+    bans: {
+      bans: listBans(),
     },
     logs: state.logBuffer,
   }

@@ -11,6 +11,13 @@ export const config = {
   logBufferLines: intEnv('LOG_BUFFER_LINES', 500),
   dashboardToken: process.env.DASHBOARD_TOKEN || '',
   dockerSocket: process.env.DOCKER_SOCKET || '/var/run/docker.sock',
+  // Writable directory for dashboard-owned state (e.g. the local banlist).
+  // Mounted as a persistent volume in production; falls back gracefully to
+  // in-memory when unwritable (e.g. local dev without the volume).
+  dataDir: process.env.DASHBOARD_DATA_DIR || '/data',
+  // Seconds to warn players (announce + save) before a restart takes the
+  // container down.
+  restartGraceSeconds: intEnv('RESTART_GRACE_SECONDS', 10),
   palworld: {
     apiUrl: (process.env.PALWORLD_API_URL || 'http://127.0.0.1:8212').replace(/\/$/, ''),
     user: process.env.PALWORLD_API_USER || 'admin',

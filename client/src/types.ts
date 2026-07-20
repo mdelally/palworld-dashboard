@@ -47,3 +47,10 @@ export interface LogEntry {
   line: string
   ts: number
 }
+
+export interface BanEntry {
+  userid: string
+  name: string | null
+  reason: string | null
+  ts: number
+}

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useColorMode } from '@vueuse/core'
 import {
   formatUptime,
@@ -8,11 +8,24 @@ import {
   useDashboard,
 } from '../composables/useDashboard'
 import PlayersPanel from '../components/PlayersPanel.vue'
+import BansPanel from '../components/BansPanel.vue'
 import LogPanel from '../components/LogPanel.vue'
 import ActionsPanel from '../components/ActionsPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
 const dash = useDashboard()
+
+// Admin token entry (only needed when DASHBOARD_TOKEN is set server-side).
+const tokenModalOpen = ref(false)
+const tokenInput = ref('')
+function openTokenModal() {
+  tokenInput.value = dash.dashboardToken.value
+  tokenModalOpen.value = true
+}
+function saveToken() {
+  dash.setDashboardToken(tokenInput.value.trim())
+  tokenModalOpen.value = false
+}
 
 const serverName = computed(() => pickServerName(dash.info.value, dash.settingsIni.value))
 const fps = computed(() => pickMetric(dash.metrics.value, 'serverfps', 'serverFPS'))
@@ -73,6 +86,14 @@ const isDark = computed({
           {{ dash.palworldReachable.value ? 'Server online' : 'Server offline' }}
         </UBadge>
         <UButton
+          :icon="dash.dashboardToken.value ? 'i-lucide-lock' : 'i-lucide-lock-open'"
+          :color="dash.dashboardToken.value ? 'success' : 'neutral'"
+          variant="ghost"
+          square
+          title="Admin token"
+          @click="openTokenModal"
+        />
+        <UButton
           :icon="isDark ? 'i-lucide-moon' : 'i-lucide-sun'"
           color="neutral"
           variant="ghost"
@@ -81,6 +102,32 @@ const isDark = computed({
         />
       </div>
     </header>
+
+    <UModal v-model:open="tokenModalOpen" title="Admin token">
+      <template #body>
+        <div class="flex flex-col gap-3">
+          <p class="text-sm text-muted">
+            Required only when the server sets <span class="font-mono">DASHBOARD_TOKEN</span>.
+            Stored in this browser and sent with admin actions (kick, ban, restart…).
+          </p>
+          <UInput
+            v-model="tokenInput"
+            type="password"
+            placeholder="Paste admin token"
+            autofocus
+            @keyup.enter="saveToken"
+          />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="ghost" @click="tokenModalOpen = false">
+            Cancel
+          </UButton>
+          <UButton icon="i-lucide-check" @click="saveToken">Save</UButton>
+        </div>
+      </template>
+    </UModal>
 
     <UAlert
       v-if="dash.error.value"
@@ -129,13 +176,25 @@ const isDark = computed({
 
     <div class="grid gap-6 lg:grid-cols-5">
       <div class="flex flex-col gap-6 lg:col-span-3">
-        <PlayersPanel :players="dash.players.value" />
+        <PlayersPanel
+          :players="dash.players.value"
+          :busy="dash.actionBusy.value"
+          :disabled="!dash.palworldReachable.value"
+          @kick="(userid, name) => dash.kickPlayer(userid, name)"
+          @ban="(userid, name, reason) => dash.banPlayer(userid, name, reason)"
+        />
+        <BansPanel
+          :bans="dash.bans.value"
+          :busy="dash.actionBusy.value"
+          @unban="(userid, name) => dash.unbanPlayer(userid, name)"
+        />
         <ActionsPanel
           :busy="dash.actionBusy.value"
           :error="dash.actionError.value"
           :disabled="!dash.palworldReachable.value"
           @announce="dash.announce"
           @save="dash.saveWorld"
+          @restart="dash.restartServer"
         />
       </div>
       <div class="flex flex-col gap-6 lg:col-span-2">
