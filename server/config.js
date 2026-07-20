@@ -23,5 +23,8 @@ export const config = {
   },
   // 'docker' | 'file' | 'auto' — auto picks docker when a container is set.
   logSource: (process.env.LOG_SOURCE || 'auto').toLowerCase(),
+  // Regex; log lines matching it are dropped before buffering/broadcast.
+  // Used to filter out the dashboard's own REST API poll traffic.
+  logExclude: process.env.LOG_EXCLUDE || '',
   isProd: process.env.NODE_ENV === 'production',
 }

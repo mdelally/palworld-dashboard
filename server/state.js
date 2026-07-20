@@ -27,8 +27,26 @@ export function broadcast(event, data) {
   }
 }
 
+let excludeRe = null
+let excludeCompiled = false
+function getExcludeRe() {
+  if (!excludeCompiled) {
+    excludeCompiled = true
+    if (config.logExclude) {
+      try {
+        excludeRe = new RegExp(config.logExclude)
+      } catch {
+        console.warn('[log] invalid LOG_EXCLUDE regex — ignoring')
+      }
+    }
+  }
+  return excludeRe
+}
+
 /** Append a single log line to the ring buffer and fan it out over SSE. */
 export function pushLogLine(line) {
+  const re = getExcludeRe()
+  if (re && re.test(line)) return
   const entry = { line, ts: Date.now() }
   state.logBuffer.push(entry)
   if (state.logBuffer.length > config.logBufferLines) {
