@@ -1,7 +1,7 @@
 ---
 taskId: 01KY03B3PTFGTN93RJBJHR8TZQ
 title: 'Phase 1 — REST admin actions: ban / kick / unban + restart'
-status: in-review
+status: done
 priority: high
 labels:
   - phase-1
@@ -10,9 +10,9 @@ labels:
   - backend
   - frontend
 effort: high
-order: 0
+order: 1
 created: '2026-07-20T15:47:01.466Z'
-updated: '2026-07-20T17:03:16.059Z'
+updated: '2026-07-20T19:54:28.975Z'
 ---
 Add mutating admin controls to the dashboard. Almost all of this is a thin routing layer over the Palworld REST API the app already authenticates against (`server/palworld.js`) — no RCON, no filesystem. Restart is the one exception (uses the Docker socket, already mounted).
 

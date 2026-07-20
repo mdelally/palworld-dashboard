@@ -1,7 +1,7 @@
 ---
 taskId: 01KY03BQY0BAYMB250RK9AEVRK
 title: Phase 2 — Settings .ini editor + backups (CodeMirror)
-status: todo
+status: in-progress
 priority: medium
 labels:
   - phase-2
@@ -12,9 +12,9 @@ labels:
 dependsOn:
   - 01KY03B3PTFGTN93RJBJHR8TZQ
 effort: high
-order: 2
+order: 0
 created: '2026-07-20T15:47:22.176Z'
-updated: '2026-07-20T15:47:22.176Z'
+updated: '2026-07-20T20:06:04.998Z'
 ---
 Let admins view/edit `PalWorldSettings.ini` from the dashboard, with a timestamped backup taken before every write. Editor via CodeMirror.
 
