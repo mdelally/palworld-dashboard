@@ -3,22 +3,13 @@ import { createReadStream, watch } from 'node:fs'
 import { createInterface } from 'node:readline'
 import path from 'node:path'
 import { config } from './config.js'
-import { state, broadcast } from './state.js'
+import { state, broadcast, pushLogLine } from './state.js'
 
 let watcher = null
 let activePath = null
 let followTimer = null
 let offset = 0
 let stopped = false
-
-function pushLine(line) {
-  const entry = { line, ts: Date.now() }
-  state.logBuffer.push(entry)
-  if (state.logBuffer.length > config.logBufferLines) {
-    state.logBuffer.splice(0, state.logBuffer.length - config.logBufferLines)
-  }
-  broadcast('log', entry)
-}
 
 async function resolveLogFile(logPath) {
   try {
@@ -86,7 +77,7 @@ async function readNewBytes(filePath) {
   offset = st.size
   const rl = createInterface({ input: stream, crlfDelay: Infinity })
   for await (const line of rl) {
-    if (line) pushLine(line)
+    if (line) pushLogLine(line)
   }
 }
 

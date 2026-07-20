@@ -6,6 +6,15 @@ import { config } from './config.js'
 import { registerRoutes } from './routes.js'
 import { startPoller, stopPoller } from './poller.js'
 import { startLogTail, stopLogTail } from './logTail.js'
+import { startDockerLogs, stopDockerLogs } from './dockerLogs.js'
+
+// Choose the log source: docker (stream a container's stdout) or file (tail a
+// Pal.log). 'auto' uses docker whenever a container name is configured.
+const useDockerLogs =
+  config.logSource === 'docker' ||
+  (config.logSource === 'auto' && Boolean(config.palworld.container))
+const startLogs = useDockerLogs ? startDockerLogs : startLogTail
+const stopLogs = useDockerLogs ? stopDockerLogs : stopLogTail
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const clientDist = path.join(__dirname, '..', 'client', 'dist')
@@ -40,11 +49,11 @@ if (config.isProd) {
 }
 
 startPoller()
-startLogTail().catch((err) => app.log.warn({ err }, 'log tail failed to start'))
+startLogs().catch((err) => app.log.warn({ err }, 'log streaming failed to start'))
 
 const shutdown = async () => {
   stopPoller()
-  stopLogTail()
+  stopLogs()
   await app.close()
   process.exit(0)
 }

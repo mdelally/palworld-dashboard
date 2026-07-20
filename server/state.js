@@ -1,5 +1,7 @@
 /** Shared live cache + SSE fan-out */
 
+import { config } from './config.js'
+
 const clients = new Set()
 
 export const state = {
@@ -23,6 +25,16 @@ export function broadcast(event, data) {
       clients.delete(client)
     }
   }
+}
+
+/** Append a single log line to the ring buffer and fan it out over SSE. */
+export function pushLogLine(line) {
+  const entry = { line, ts: Date.now() }
+  state.logBuffer.push(entry)
+  if (state.logBuffer.length > config.logBufferLines) {
+    state.logBuffer.splice(0, state.logBuffer.length - config.logBufferLines)
+  }
+  broadcast('log', entry)
 }
 
 export function addSseClient(reply) {
