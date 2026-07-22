@@ -20,6 +20,7 @@ ENV PALWORLD_PARSER_PYTHON=/opt/parser-venv/bin/python
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     python3 \
+    python3-dev \
     python3-pip \
     python3-venv \
     git \
@@ -30,11 +31,12 @@ RUN apt-get update \
 
 COPY parser/requirements.txt /opt/parser/requirements.txt
 # Keep git available through pip install (git+https deps + pyooz submodules).
+# python3-dev is required to compile pyooz (needs Python.h).
 RUN python3 -m venv /opt/parser-venv \
   && /opt/parser-venv/bin/pip install --no-cache-dir -U pip setuptools wheel \
   && /opt/parser-venv/bin/pip install --no-cache-dir -r /opt/parser/requirements.txt \
   && /opt/parser-venv/bin/python -c "import ooz, palworld_save_tools; print('parser ok', ooz.__file__)" \
-  && apt-get purge -y --auto-remove build-essential g++ git \
+  && apt-get purge -y --auto-remove build-essential g++ git python3-dev \
   && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 COPY package.json package-lock.json* ./
