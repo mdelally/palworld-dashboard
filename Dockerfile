@@ -24,14 +24,17 @@ RUN apt-get update \
     python3-venv \
     git \
     build-essential \
+    g++ \
     ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 COPY parser/requirements.txt /opt/parser/requirements.txt
+# Keep git available through pip install (git+https deps + pyooz submodules).
 RUN python3 -m venv /opt/parser-venv \
-  && /opt/parser-venv/bin/pip install --no-cache-dir -U pip \
+  && /opt/parser-venv/bin/pip install --no-cache-dir -U pip setuptools wheel \
   && /opt/parser-venv/bin/pip install --no-cache-dir -r /opt/parser/requirements.txt \
-  && apt-get purge -y --auto-remove build-essential git \
+  && /opt/parser-venv/bin/python -c "import ooz, palworld_save_tools; print('parser ok', ooz.__file__)" \
+  && apt-get purge -y --auto-remove build-essential g++ git \
   && rm -rf /var/lib/apt/lists/* /root/.cache/pip
 
 COPY package.json package-lock.json* ./

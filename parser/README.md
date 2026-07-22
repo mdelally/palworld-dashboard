@@ -22,7 +22,7 @@ Stdout is a single JSON object (`ok: true` report, or `ok: false` with an
 ```bash
 uv venv --python 3.12 .venv-save-tools
 uv pip install --python .venv-save-tools/bin/python -r parser/requirements.txt
-# Fix: if creating the venv via host python inside Kleron, use `uv` as above.
+# pyooz comes in transitively from the MRHRTZ fork — do not also pin it.
 ```
 
 ## Docker
