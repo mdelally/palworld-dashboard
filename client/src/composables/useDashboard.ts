@@ -14,6 +14,10 @@ import type {
 
 const MAX_LOG_LINES = 500
 const TOKEN_KEY = 'palworld-dashboard-token'
+/** Rolling window for the FPS sparkline under the home metric card. */
+export const FPS_HISTORY_MS = 30 * 60 * 1000
+
+export type FpsSample = { t: number; fps: number }
 
 export function useDashboard() {
   const connected = ref(false)
@@ -30,8 +34,22 @@ export function useDashboard() {
   const settingsApi = ref<Record<string, unknown> | null>(null)
   const settingsIni = ref<IniSummary | null>(null)
   const logs = reactive<LogEntry[]>([])
+  const fpsHistory = ref<FpsSample[]>([])
   const actionBusy = ref(false)
   const actionError = ref<string | null>(null)
+
+  function recordFpsSample(nextMetrics: ServerMetrics | null, ts: number) {
+    const fps = pickMetric(nextMetrics, 'serverfps', 'serverFPS')
+    const cutoff = ts - FPS_HISTORY_MS
+    const kept = fpsHistory.value.filter((s) => s.t >= cutoff)
+    if (fps != null && Number.isFinite(fps)) {
+      const last = kept[kept.length - 1]
+      // Collapse near-duplicate samples so the path stays smooth across reconnects.
+      if (!last || last.t !== ts) kept.push({ t: ts, fps })
+      else last.fps = fps
+    }
+    fpsHistory.value = kept
+  }
 
   // Admin token for token-gated deploys (DASHBOARD_TOKEN set server-side).
   // Sent as x-dashboard-token on every mutating call. Persisted locally so it
@@ -137,7 +155,9 @@ export function useDashboard() {
       const data = JSON.parse((ev as MessageEvent).data)
       info.value = data.info ?? null
       metrics.value = data.metrics ?? null
-      updatedAt.value = data.ts ?? Date.now()
+      const ts = data.ts ?? Date.now()
+      updatedAt.value = ts
+      recordFpsSample(data.metrics ?? null, ts)
     })
 
     es.addEventListener('players', (ev) => {
@@ -324,6 +344,7 @@ export function useDashboard() {
     settingsApi,
     settingsIni,
     logs,
+    fpsHistory,
     logPaused,
     actionBusy,
     actionError,

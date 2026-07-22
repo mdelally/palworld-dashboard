@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import type { TabsItem } from "@nuxt/ui";
 import { useColorMode } from "@vueuse/core";
 import {
+  FPS_HISTORY_MS,
   formatUptime,
   pickMetric,
   pickServerName,
@@ -16,6 +17,7 @@ import AutostopPanel from "../components/AutostopPanel.vue";
 import BasesPanel from "../components/BasesPanel.vue";
 import ConfigEditorPanel from "../components/ConfigEditorPanel.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
+import MetricSparkline from "../components/MetricSparkline.vue";
 
 const dash = useDashboard();
 
@@ -33,6 +35,9 @@ function saveToken() {
 
 const serverName = computed(() => pickServerName(dash.info.value, dash.settingsIni.value));
 const fps = computed(() => pickMetric(dash.metrics.value, "serverfps", "serverFPS"));
+const fpsSparkPoints = computed(() =>
+  dash.fpsHistory.value.map((s) => ({ t: s.t, v: s.fps })),
+);
 const uptime = computed(() => formatUptime(pickMetric(dash.metrics.value, "uptime", "uptime")));
 const playerCount = computed(() => {
   const fromMetrics = pickMetric(dash.metrics.value, "currentplayernum", "currentPlayerNum");
@@ -60,6 +65,30 @@ const isDark = computed({
   },
 });
 
+const containerRunning = computed(() => dash.autostop.value?.containerRunning ?? null);
+const serverOnline = computed(() => dash.palworldReachable.value);
+const powerDisabled = computed(() => {
+  if (serverOnline.value) return containerRunning.value === false;
+  return containerRunning.value === true;
+});
+
+const stopOpen = ref(false);
+const stopConfirmText = ref("");
+function requestStop() {
+  if (dash.actionBusy.value || powerDisabled.value) return;
+  stopConfirmText.value = "";
+  stopOpen.value = true;
+}
+function confirmStop() {
+  if (stopConfirmText.value.trim().toUpperCase() !== "STOP") return;
+  stopOpen.value = false;
+  void dash.stopServer();
+}
+function onServerPowerClick() {
+  if (serverOnline.value) requestStop();
+  else void dash.startServer();
+}
+
 const activeTab = ref("home");
 const tabs: TabsItem[] = [
   { label: "Home", icon: "i-lucide-layout-dashboard", value: "home", slot: "home" },
@@ -85,13 +114,26 @@ const tabs: TabsItem[] = [
         <UBadge :color="dash.connected.value ? 'success' : 'warning'" variant="subtle" size="lg">
           {{ dash.connected.value ? 'SSE live' : 'SSE reconnecting' }}
         </UBadge>
-        <UBadge
-          :color="dash.palworldReachable.value ? 'success' : 'error'"
-          variant="solid"
-          size="lg"
-        >
-          {{ dash.palworldReachable.value ? 'Server online' : 'Server offline' }}
-        </UBadge>
+        <UFieldGroup size="lg">
+          <UBadge
+            :color="serverOnline ? 'success' : 'error'"
+            variant="solid"
+            size="lg"
+          >
+            {{ serverOnline ? 'Server online' : 'Server offline' }}
+          </UBadge>
+          <UButton
+            :color="serverOnline ? 'neutral' : 'success'"
+            variant="solid"
+            :icon="serverOnline ? 'i-lucide-square' : 'i-lucide-play'"
+            :loading="dash.actionBusy.value"
+            :disabled="powerDisabled"
+            :title="serverOnline ? 'Stop server' : 'Start server'"
+            @click="onServerPowerClick"
+          >
+            {{ serverOnline ? 'Stop' : 'Start' }}
+          </UButton>
+        </UFieldGroup>
         <UButton
           :icon="dash.dashboardToken.value ? 'i-lucide-lock' : 'i-lucide-lock-open'"
           :color="dash.dashboardToken.value ? 'success' : 'neutral'"
@@ -109,6 +151,41 @@ const tabs: TabsItem[] = [
         />
       </div>
     </header>
+
+    <UModal v-model:open="stopOpen" title="Stop the server?">
+      <template #body>
+        <div class="flex flex-col gap-3">
+          <p class="text-sm text-muted">
+            This saves the world (if reachable), then stops the game container and
+            leaves it down. Use Start when you want it back.
+          </p>
+          <p class="text-sm text-muted">
+            Type <span class="font-mono font-semibold text-highlighted">STOP</span> to confirm.
+          </p>
+          <UInput
+            v-model="stopConfirmText"
+            placeholder="STOP"
+            autofocus
+            @keyup.enter="confirmStop"
+          />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="ghost" @click="stopOpen = false">
+            Cancel
+          </UButton>
+          <UButton
+            color="neutral"
+            icon="i-lucide-square"
+            :disabled="stopConfirmText.trim().toUpperCase() !== 'STOP'"
+            @click="confirmStop"
+          >
+            Stop now
+          </UButton>
+        </div>
+      </template>
+    </UModal>
 
     <UModal v-model:open="tokenModalOpen" title="Admin token">
       <template #body>
@@ -189,6 +266,14 @@ const tabs: TabsItem[] = [
             <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
               <p class="text-xs text-muted uppercase">FPS</p>
               <p class="mt-1 text-2xl font-semibold tabular-nums">{{ fps ?? '—' }}</p>
+              <MetricSparkline
+                class="mt-2"
+                :points="fpsSparkPoints"
+                :window-ms="FPS_HISTORY_MS"
+                :y-min="0"
+                :y-soft-max="60"
+                aria-label="Server FPS over the last 30 minutes"
+              />
             </div>
             <div class="rounded-xl border border-default bg-elevated/60 px-4 py-3 backdrop-blur">
               <p class="text-xs text-muted uppercase">Uptime</p>
