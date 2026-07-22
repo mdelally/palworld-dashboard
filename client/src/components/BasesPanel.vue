@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { BaseCamp, BasesReport } from '../types'
+import type { BaseCamp, BasePal, BasesReport } from '../types'
 
 const props = defineProps<{
   report: BasesReport | null
@@ -40,11 +40,57 @@ function locLabel(base: BaseCamp) {
   return `${Math.round(x)}, ${Math.round(y)}`
 }
 
+function baseTitle(base: BaseCamp) {
+  return base.name || `Base ${base.id.slice(0, 8)}`
+}
+
+function humanize(value: string) {
+  // DodgeWork_Sleep → Dodge work sleep; GastricUlcer → Gastric ulcer
+  return value
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 function statusColor(status: string) {
-  if (status === 'hungry') return 'warning'
-  if (status === 'injured') return 'error'
+  if (status === 'hungry' || status === 'starving' || status === 'slacking') return 'warning'
+  if (status === 'injured' || status === 'sick') return 'error'
   if (status === 'working') return 'success'
   return 'neutral'
+}
+
+function palDisplayName(pal: BasePal) {
+  if (pal.nickName) return `${pal.nickName} (${pal.species})`
+  return pal.species
+}
+
+function palDetailBits(pal: BasePal) {
+  const bits: string[] = []
+  if (pal.ownerName) bits.push(pal.ownerName)
+  if (pal.fullStomach != null) bits.push(`stomach ${Math.round(pal.fullStomach)}`)
+  if (pal.sanity != null) bits.push(`sanity ${Math.round(pal.sanity)}`)
+  if (pal.hp != null) bits.push(`HP ${pal.hp}`)
+  if (pal.rank != null && pal.rank > 0) bits.push(`rank ${pal.rank}`)
+  if (pal.isRare) bits.push('rare')
+  return bits
+}
+
+function conditionBadges(pal: BasePal) {
+  const out: Array<{ label: string; color: 'error' | 'warning' | 'neutral' | 'info' }> = []
+  if (pal.physicalHealth) {
+    out.push({ label: humanize(pal.physicalHealth), color: 'error' })
+  }
+  if (pal.workerSick) {
+    out.push({ label: humanize(pal.workerSick), color: 'error' })
+  }
+  if (pal.hungerType) {
+    out.push({ label: humanize(pal.hungerType), color: 'warning' })
+  }
+  if (pal.workerEvent) {
+    out.push({ label: humanize(pal.workerEvent), color: 'warning' })
+  }
+  return out
 }
 
 function updatedLabel() {
@@ -149,11 +195,12 @@ function updatedLabel() {
         >
           <div class="min-w-0">
             <p class="truncate text-sm font-medium">
-              {{ base.name || `Base ${base.id.slice(0, 8)}` }}
+              {{ baseTitle(base) }}
             </p>
             <p class="text-xs text-muted">
               Owner {{ ownerLabel(base) }} · {{ locLabel(base) }} ·
               {{ base.palCount }} pals
+              <span v-if="base.nameIsDefault"> · default name</span>
             </p>
           </div>
           <UIcon
@@ -179,23 +226,45 @@ function updatedLabel() {
             <li
               v-for="pal in base.pals"
               :key="pal.instanceId || `${pal.species}-${pal.slotIndex}`"
-              class="flex items-center justify-between gap-3 py-2 text-sm"
+              class="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-start sm:justify-between"
             >
-              <div class="min-w-0">
-                <p class="truncate font-medium">
-                  {{ pal.species }}
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">
+                  {{ palDisplayName(pal) }}
                   <span class="text-muted font-normal">Lv {{ pal.level ?? '—' }}</span>
                 </p>
-                <p class="text-xs text-muted">
-                  <span v-if="pal.ownerName">{{ pal.ownerName }} · </span>
-                  <span v-if="pal.fullStomach != null">hunger {{ Math.round(pal.fullStomach) }}</span>
-                  <span v-if="pal.hp != null"> · HP {{ pal.hp }}</span>
+                <p
+                  v-if="palDetailBits(pal).length"
+                  class="text-xs text-muted"
+                >
+                  {{ palDetailBits(pal).join(' · ') }}
+                </p>
+                <div
+                  v-if="conditionBadges(pal).length"
+                  class="mt-1.5 flex flex-wrap gap-1"
+                >
+                  <UBadge
+                    v-for="badge in conditionBadges(pal)"
+                    :key="badge.label"
+                    :color="badge.color"
+                    variant="subtle"
+                    size="sm"
+                  >
+                    {{ badge.label }}
+                  </UBadge>
+                </div>
+                <p
+                  v-if="pal.passives?.length"
+                  class="mt-1 text-xs text-muted"
+                >
+                  Passives: {{ pal.passives.map(humanize).join(', ') }}
                 </p>
               </div>
               <UBadge
                 :color="statusColor(pal.status)"
                 variant="subtle"
                 size="sm"
+                class="shrink-0 self-start"
               >
                 {{ pal.status }}
               </UBadge>

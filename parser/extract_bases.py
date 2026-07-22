@@ -19,6 +19,8 @@ from typing import Any
 
 ZERO_UUID = "00000000-0000-0000-0000-000000000000"
 HUNGRY_STOMACH = 30.0
+# Pocketpair default base names look like 新規生成拠点テンプレート名0(仮)
+DEFAULT_BASE_NAME_MARKERS = ("新規生成拠点", "テンプレート名")
 
 # Selective custom-property decode: full decode still dies on some MapObject
 # modules in 0.6+. Bases + characters + work are enough for this report.
@@ -63,6 +65,34 @@ def prop(value: Any) -> Any:
     return value
 
 
+def enum_tail(value: Any) -> str | None:
+    """Turn EPalFoo::Bar / {'value': 'EPalFoo::Bar'} into 'Bar' (None if unset)."""
+    raw = prop(value)
+    if isinstance(raw, dict) and "value" in raw:
+        raw = prop(raw["value"])
+    if not isinstance(raw, str) or not raw or raw == "None":
+        return None
+    if "::" in raw:
+        raw = raw.rsplit("::", 1)[-1]
+    if raw in ("None", "None_"):
+        return None
+    return raw
+
+
+def name_list(value: Any) -> list[str]:
+    raw = prop(value)
+    if isinstance(raw, dict) and "values" in raw:
+        raw = raw["values"]
+    if not isinstance(raw, list):
+        return []
+    out: list[str] = []
+    for item in raw:
+        s = as_str(prop(item)) if not isinstance(item, str) else item
+        if s:
+            out.append(s)
+    return out
+
+
 def byte_or_int(value: Any) -> int | None:
     value = prop(value)
     if isinstance(value, bool):
@@ -103,10 +133,49 @@ def slot_index_from_slot(slot: Any) -> int | None:
     return byte_or_int(slot.get("SlotIndex"))
 
 
-def classify_status(*, at_base: bool, full_stomach: float | None, hp: int | None) -> str:
-    # Priority: hungry > working > idle. Injured omitted until we have max HP.
+def is_default_base_name(name: str | None) -> bool:
+    if not name:
+        return True
+    return any(marker in name for marker in DEFAULT_BASE_NAME_MARKERS)
+
+
+def soft_base_name(
+    raw_name: str | None,
+    *,
+    index: int,
+    owner_names: list[str],
+) -> str:
+    if raw_name and not is_default_base_name(raw_name):
+        return raw_name
+    if len(owner_names) == 1:
+        return f"{owner_names[0]}'s base"
+    if owner_names:
+        return f"Base {index} ({', '.join(owner_names[:2])})"
+    return f"Base {index}"
+
+
+def classify_status(
+    *,
+    at_base: bool,
+    full_stomach: float | None,
+    hunger_type: str | None,
+    physical_health: str | None,
+    worker_sick: str | None,
+    worker_event: str | None,
+) -> str:
+    # Priority: injured > sick > starving/hungry > slacking > working > idle
+    if physical_health and physical_health.lower() not in ("healthy", "none"):
+        return "injured"
+    if worker_sick:
+        return "sick"
+    if hunger_type and hunger_type.lower() in ("starvation", "starve"):
+        return "starving"
+    if hunger_type and hunger_type.lower() in ("hunger", "hungry"):
+        return "hungry"
     if full_stomach is not None and full_stomach < HUNGRY_STOMACH:
         return "hungry"
+    if worker_event and "dodge" in worker_event.lower():
+        return "slacking"
     if at_base:
         return "working"
     return "idle"
@@ -223,19 +292,40 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             stomach = float(full_stomach)
         else:
             stomach = None
+        sanity_raw = prop(save_parameter.get("SanityValue"))
+        sanity = float(sanity_raw) if isinstance(sanity_raw, (int, float)) else None
         hp = fixed_hp(save_parameter.get("Hp"))
         owner_uid = as_str(prop(save_parameter.get("OwnerPlayerUId")))
         container_id = container_id_from_slot(save_parameter.get("SlotId"))
         slot_index = slot_index_from_slot(save_parameter.get("SlotId"))
+        nick = prop(save_parameter.get("NickName"))
+        if not isinstance(nick, str) or not nick.strip():
+            nick = None
+        hunger_type = enum_tail(save_parameter.get("HungerType"))
+        physical_health = enum_tail(save_parameter.get("PhysicalHealth"))
+        worker_sick = enum_tail(save_parameter.get("WorkerSick"))
+        worker_event = enum_tail(save_parameter.get("BaseCampWorkerEventType"))
+        passives = name_list(save_parameter.get("PassiveSkillList"))
+        is_rare = bool(prop(save_parameter.get("IsRarePal")))
+        rank = byte_or_int(save_parameter.get("Rank"))
         if group_id:
             pals_by_group[group_id].append(species)
 
         pal = {
             "instanceId": instance_id,
             "species": species,
+            "nickName": nick,
             "level": level,
             "hp": hp,
             "fullStomach": round(stomach, 1) if stomach is not None else None,
+            "sanity": round(sanity, 1) if sanity is not None else None,
+            "hungerType": hunger_type,
+            "physicalHealth": physical_health,
+            "workerSick": worker_sick,
+            "workerEvent": worker_event,
+            "passives": passives,
+            "isRare": is_rare,
+            "rank": rank,
             "ownerPlayerUid": owner_uid,
             "ownerName": None,
             "containerId": container_id,
@@ -253,7 +343,10 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
                 pal["ownerName"] = owner["name"]
 
     bases: list[dict[str, Any]] = []
-    for entry in wsd.get("BaseCampSaveData", {}).get("value", []) or []:
+    for base_index, entry in enumerate(
+        wsd.get("BaseCampSaveData", {}).get("value", []) or [],
+        start=1,
+    ):
         base_id = as_str(entry.get("key"))
         value = entry.get("value") or {}
         raw = prop(value.get("RawData"))
@@ -267,6 +360,7 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             worker = {}
         worker_container = as_str(worker.get("container_id"))
         group_id = as_str(raw.get("group_id_belong_to"))
+        raw_name = raw.get("name") if isinstance(raw.get("name"), str) else None
 
         owner_names: list[str] = []
         owner_uids: list[str] = []
@@ -281,15 +375,28 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             status = classify_status(
                 at_base=True,
                 full_stomach=pal.get("fullStomach"),
-                hp=pal.get("hp"),
+                hunger_type=pal.get("hungerType"),
+                physical_health=pal.get("physicalHealth"),
+                worker_sick=pal.get("workerSick"),
+                worker_event=pal.get("workerEvent"),
             )
             pals.append({**pal, "status": status})
-        pals.sort(key=lambda p: (p.get("species") or "", p.get("level") or 0))
+        pals.sort(
+            key=lambda p: (
+                0 if p.get("status") in ("injured", "sick", "starving") else 1,
+                p.get("species") or "",
+                p.get("level") or 0,
+            )
+        )
 
         bases.append(
             {
                 "id": base_id,
-                "name": raw.get("name") if isinstance(raw.get("name"), str) else None,
+                "name": soft_base_name(
+                    raw_name, index=base_index, owner_names=owner_names
+                ),
+                "rawName": raw_name,
+                "nameIsDefault": is_default_base_name(raw_name),
                 "state": raw.get("state"),
                 "areaRange": raw.get("area_range"),
                 "groupId": group_id,

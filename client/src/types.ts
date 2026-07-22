@@ -84,9 +84,18 @@ export interface AutostopState {
 export interface BasePal {
   instanceId?: string | null
   species: string
+  nickName?: string | null
   level: number | null
   hp?: number | null
   fullStomach?: number | null
+  sanity?: number | null
+  hungerType?: string | null
+  physicalHealth?: string | null
+  workerSick?: string | null
+  workerEvent?: string | null
+  passives?: string[]
+  isRare?: boolean
+  rank?: number | null
   ownerPlayerUid?: string | null
   ownerName?: string | null
   containerId?: string | null
@@ -98,6 +107,8 @@ export interface BasePal {
 export interface BaseCamp {
   id: string
   name?: string | null
+  rawName?: string | null
+  nameIsDefault?: boolean
   state?: number | null
   areaRange?: number | null
   groupId?: string | null
