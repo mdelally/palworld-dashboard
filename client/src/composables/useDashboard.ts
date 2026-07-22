@@ -2,6 +2,7 @@ import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import type {
   AutostopState,
   BanEntry,
+  BasesReport,
   ConfigBackup,
   ConfigFile,
   IniSummary,
@@ -25,6 +26,7 @@ export function useDashboard() {
   const players = ref<Player[]>([])
   const bans = ref<BanEntry[]>([])
   const autostop = ref<AutostopState | null>(null)
+  const bases = ref<BasesReport | null>(null)
   const settingsApi = ref<Record<string, unknown> | null>(null)
   const settingsIni = ref<IniSummary | null>(null)
   const logs = reactive<LogEntry[]>([])
@@ -161,6 +163,11 @@ export function useDashboard() {
       if (data.notice) notice.value = data.notice
     })
 
+    es.addEventListener('bases', (ev) => {
+      const data = JSON.parse((ev as MessageEvent).data) as BasesReport
+      bases.value = data
+    })
+
     es.addEventListener('log', (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as LogEntry
       pushLog(data)
@@ -263,6 +270,16 @@ export function useDashboard() {
     })
   }
 
+  async function refreshBases() {
+    await runAction(async () => {
+      const data = await mutate('/api/bases/refresh')
+      bases.value = data as BasesReport
+      notice.value = data.status === 'ready'
+        ? `Bases report refreshed (${data.stats?.baseCount ?? 0} bases)`
+        : 'Bases refresh requested'
+    })
+  }
+
   // --- Settings .ini editor (Phase 2) ---------------------------------------
   // These return data (not fire-and-forget), so the ConfigEditorPanel owns its
   // own loading/error state rather than the shared actionBusy flag.
@@ -303,6 +320,7 @@ export function useDashboard() {
     players,
     bans,
     autostop,
+    bases,
     settingsApi,
     settingsIni,
     logs,
@@ -323,6 +341,7 @@ export function useDashboard() {
     stopServer,
     updateAutostop,
     cancelAutostop,
+    refreshBases,
     loadConfig,
     saveConfig,
     loadConfigBackups,

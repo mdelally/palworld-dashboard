@@ -12,6 +12,7 @@ import BansPanel from '../components/BansPanel.vue'
 import LogPanel from '../components/LogPanel.vue'
 import ActionsPanel from '../components/ActionsPanel.vue'
 import AutostopPanel from '../components/AutostopPanel.vue'
+import BasesPanel from '../components/BasesPanel.vue'
 import ConfigEditorPanel from '../components/ConfigEditorPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
@@ -206,6 +207,11 @@ const isDark = computed({
           :busy="dash.actionBusy.value"
           @update="dash.updateAutostop"
           @cancel="dash.cancelAutostop"
+        />
+        <BasesPanel
+          :report="dash.bases.value"
+          :busy="dash.actionBusy.value"
+          @refresh="dash.refreshBases"
         />
       </div>
       <div class="flex flex-col gap-6 lg:col-span-2">

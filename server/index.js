@@ -8,6 +8,7 @@ import { startPoller, stopPoller } from './poller.js'
 import { startLogTail, stopLogTail } from './logTail.js'
 import { startDockerLogs, stopDockerLogs } from './dockerLogs.js'
 import { startAutostop, stopAutostop } from './autostop.js'
+import { loadCachedReport } from './saveReport.js'
 
 // Choose the log source: docker (stream a container's stdout) or file (tail a
 // Pal.log). 'auto' uses docker whenever a container name is configured.
@@ -51,6 +52,16 @@ if (config.isProd) {
 
 startPoller()
 startAutostop()
+loadCachedReport()
+  .then((snap) => {
+    if (snap?.status === 'ready') {
+      app.log.info(
+        { bases: snap.report?.stats?.baseCount ?? 0, snapshotId: snap.snapshotId },
+        'loaded cached bases report',
+      )
+    }
+  })
+  .catch((err) => app.log.warn({ err }, 'bases report cache load failed'))
 app.log.info(
   {
     source: useDockerLogs

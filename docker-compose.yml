@@ -17,6 +17,10 @@ services:
       # its stdout via the Docker socket (Palworld logs to console, not a file).
       PALWORLD_CONTAINER: ${PALWORLD_CONTAINER:-palworld}
       PALWORLD_CONFIG_PATH: /data/PalWorldSettings.ini
+      # World save folder (Level.sav + Players/). Mount :ro — dashboard only copies
+      # into /data/save-snapshots before parsing.
+      PALWORLD_SAVE_PATH: /data/saves
+      PALWORLD_PARSER_PYTHON: /opt/parser-venv/bin/python
       DASHBOARD_PORT: 8787
       DASHBOARD_TOKEN: ${DASHBOARD_TOKEN:-}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-2000}
@@ -45,6 +49,9 @@ services:
       # from the UI. Requires a container UID that can write the file (this stack
       # runs as root; see the `user:` note above).
       - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:rw
+      # Read-only mount of the active world save (folder that contains Level.sav).
+      # Adjust the host path / world id to match your server.
+      - /mnt/user/appdata/palworld/Pal/Saved/SaveGames/0/75D4220D2E304791995D2E787E4B4856:/data/saves:ro
     # Redundant while user is root (root can already reach the socket); kept for
     # anyone who switches back to a non-root user. Find it: getent group docker
     group_add:

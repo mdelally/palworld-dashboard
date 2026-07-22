@@ -8,3 +8,12 @@ local-logs/
 .DS_Store
 .vite/
 *.tsbuildinfo
+
+# Local Palworld save fixtures (binaries; may contain player names / Steam IDs)
+fixtures/saves/
+
+# Local parser spike tooling / JSON dumps
+.venv-save-tools/
+parser/__pycache__/
+**/__pycache__/
+*.pyc

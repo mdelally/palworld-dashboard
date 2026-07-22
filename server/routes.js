@@ -17,6 +17,12 @@ import {
   refreshContainerState,
   ALLOWED_DELAY_MINUTES,
 } from './autostop.js'
+import {
+  snapshotForClient as basesSnapshot,
+  snapshotAndParse,
+  queueSnapshotAndParse,
+  resolveLevelSav,
+} from './saveReport.js'
 
 function validUserId(value) {
   return typeof value === 'string' && value.trim().length > 0
@@ -87,6 +93,7 @@ export async function registerRoutes(app) {
     reply.raw.write(`event: settings\ndata: ${JSON.stringify(snap.settings)}\n\n`)
     reply.raw.write(`event: bans\ndata: ${JSON.stringify(snap.bans)}\n\n`)
     reply.raw.write(`event: autostop\ndata: ${JSON.stringify(snap.autostop)}\n\n`)
+    reply.raw.write(`event: bases\ndata: ${JSON.stringify(snap.bases)}\n\n`)
     for (const entry of snap.logs) {
       reply.raw.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`)
     }
@@ -326,6 +333,8 @@ export async function registerRoutes(app) {
       } catch (err) {
         request.log.warn({ err }, 'stop pre-flight save failed')
       }
+      // Same logout-snapshot path as autostop: copy then parse async.
+      queueSnapshotAndParse({ trigger: 'manual-stop' })
       await stopContainer({ timeoutSeconds: 30 })
       const snap = await refreshContainerState()
       broadcast('autostop', snap)
@@ -368,5 +377,40 @@ export async function registerRoutes(app) {
     if (!requireToken(request, reply)) return
     const snap = cancelAutostop('Autostop cancelled manually')
     return { ok: true, ...snap }
+  })
+
+  // --- Phase 3: logout-snapshot bases / pals report -----------------------
+  // Read-only. Report is produced by copying Level.sav then parsing the copy
+  // with parser/extract_bases.py (never writes the live save).
+
+  app.get('/api/bases', async () => basesSnapshot())
+
+  app.post('/api/bases/refresh', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const resolved = await resolveLevelSav()
+    if (!resolved && !config.palworld.savePath) {
+      return reply.code(503).send({
+        error: 'PALWORLD_SAVE_PATH is not configured',
+        code: 'save_path_unavailable',
+      })
+    }
+    if (!resolved) {
+      return reply.code(404).send({
+        error: `No Level.sav found under ${config.palworld.savePath}`,
+        code: 'save_path_unavailable',
+      })
+    }
+    try {
+      // Manual refresh still snapshots first so we never parse a live mid-write file.
+      const state = await snapshotAndParse({ trigger: 'manual-refresh' })
+      return { ok: true, ...basesSnapshot(), parseStatus: state.status }
+    } catch (err) {
+      return reply.code(err.code === 'unsupported_save_version' ? 422 : 500).send({
+        error: err.message,
+        code: err.code || 'parser_failed',
+        details: err.details || null,
+        ...basesSnapshot(),
+      })
+    }
   })
 }

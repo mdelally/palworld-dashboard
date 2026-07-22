@@ -10,6 +10,8 @@ Live ops dashboard for a Palworld dedicated server on Unraid. Node (Fastify) pol
 - Announce + force save (admin password stays on the server)
 - Admin actions: kick / ban / unban players, and restart the game container
 - Read-only settings from REST API + `PalWorldSettings.ini`
+- Autostop idle timer (save + stop container when the world stays empty)
+- **Bases at logout** — on empty-world stop, copy `Level.sav` and parse a read-only bases/pals report
 
 ## Quick start (dev)
 
@@ -41,6 +43,10 @@ Open http://\<unraid-ip\>:8787 (or via Tailscale).
 | `PALWORLD_API_PASSWORD` | — | Same as `AdminPassword` in Palworld settings |
 | `PALWORLD_LOG_PATH` | `/data/logs` | File or directory (newest `.log` used) |
 | `PALWORLD_CONFIG_PATH` | `/data/PalWorldSettings.ini` | Optional ini summary |
+| `PALWORLD_SAVE_PATH` | empty | World folder containing `Level.sav` (+ `Players/`). Mount `:ro` in Docker |
+| `PALWORLD_PARSER_PYTHON` | local venv / `python3` | Python with MRHRTZ `palworld-save-tools` + `pyooz` (image default `/opt/parser-venv/bin/python`) |
+| `PALWORLD_PARSER_TIMEOUT_MS` | `120000` | Max parse time for `Level.sav` |
+| `PALWORLD_SNAPSHOT_KEEP` | `5` | How many copied snapshots to retain under `DASHBOARD_DATA_DIR/save-snapshots` |
 | `DASHBOARD_PORT` | `8787` | HTTP listen port |
 | `DASHBOARD_TOKEN` | empty | If set, required for all mutating actions |
 | `POLL_INTERVAL_MS` | `2000` | REST poll interval |
@@ -112,6 +118,31 @@ Docker-stops the container, leaving it down until you hit Start.
 Settings persist in `autostop.json` under `DASHBOARD_DATA_DIR`. The UI shows a
 live countdown over SSE and can cancel an armed timer.
 
+### Bases at logout (save parsing)
+
+Palworld has no API for base/pal contents. On **autostop** or **manual Stop**
+the dashboard:
+
+1. Requests a world `save()`
+2. **Copies** `Level.sav` (+ `LevelMeta.sav`, `Players/*.sav`) into
+   `DASHBOARD_DATA_DIR/save-snapshots/<id>/` (never mutates the live save)
+3. Stops the game container
+4. Parses the **copy** with `parser/extract_bases.py` (Python /
+   MRHRTZ `palworld-save-tools` + Oodle via `pyooz`) and caches a compact report
+
+The UI “Bases at logout” panel lists each base (owner, location) and expands to
+show assigned pals (species, level, working/hungry). `GET /api/bases` returns
+the cached report; `POST /api/bases/refresh` takes a fresh snapshot+parse
+(token-gated). Unsupported save formats fail with a clear
+`unsupported_save_version` error instead of garbage data.
+
+Mount the world folder read-only, e.g.:
+
+```text
+…/Pal/Saved/SaveGames/0/<worldid>  →  /data/saves:ro
+PALWORLD_SAVE_PATH=/data/saves
+```
+
 ## API
 
 | Method | Path | Description |
@@ -133,6 +164,8 @@ live countdown over SSE and can cancel an armed timer.
 | GET | `/api/autostop` | Autostop settings + countdown state |
 | PUT | `/api/autostop` | `{ "enabled": true, "delayMinutes": 60 }` |
 | POST | `/api/autostop/cancel` | Cancel an armed countdown |
+| GET | `/api/bases` | Cached logout bases/pals report |
+| POST | `/api/bases/refresh` | Snapshot + parse now (token-gated) |
 
 ## Spec
 

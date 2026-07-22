@@ -4,6 +4,7 @@ import { config } from './config.js'
 import { palworld } from './palworld.js'
 import { stopContainer, getContainerState } from './dockerControl.js'
 import { state, broadcast } from './state.js'
+import { queueSnapshotAndParse } from './saveReport.js'
 
 // Idle autostop: when the world goes empty, arm a countdown. On expiry, save
 // the world and Docker-stop the game container (leave it down). Any login
@@ -143,6 +144,9 @@ async function fireStop() {
     } catch (err) {
       console.warn('[autostop] save failed (continuing to stop):', err.message)
     }
+    // Copy Level.sav (+ Players) then parse the copy asynchronously. Never
+    // blocks the Docker stop, and never touches the live file after this point.
+    queueSnapshotAndParse({ trigger: 'autostop' })
     await stopContainer({ timeoutSeconds: 30 })
     containerRunning = false
     containerStatus = 'exited'

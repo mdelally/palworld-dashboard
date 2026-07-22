@@ -27,6 +27,14 @@ export const config = {
     // Name/ID of the Palworld game-server container. When set, logs are
     // streamed from its stdout via the Docker socket instead of a log file.
     container: process.env.PALWORLD_CONTAINER || '',
+    // World save folder (contains Level.sav + Players/). Mount :ro in Docker.
+    // Snapshots are copied into DASHBOARD_DATA_DIR/save-snapshots/ before parse.
+    savePath: process.env.PALWORLD_SAVE_PATH || '',
+    // Python used to run parser/extract_bases.py. Empty → local .venv-save-tools
+    // or python3 on PATH.
+    parserPython: process.env.PALWORLD_PARSER_PYTHON || '',
+    parserTimeoutMs: intEnv('PALWORLD_PARSER_TIMEOUT_MS', 120_000),
+    snapshotKeep: intEnv('PALWORLD_SNAPSHOT_KEEP', 5),
   },
   // 'docker' | 'file' | 'auto' — auto picks docker when a container is set.
   logSource: (process.env.LOG_SOURCE || 'auto').toLowerCase(),

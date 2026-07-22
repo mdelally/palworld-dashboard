@@ -1,7 +1,7 @@
 ---
 taskId: 01KY03CFPYVC3XA8W0YQEQFYY7
 title: Phase 3 — Read-only base & pal inspection (save parsing)
-status: todo
+status: in-progress
 priority: low
 labels:
   - phase-3
@@ -12,9 +12,9 @@ labels:
 dependsOn:
   - 01KY52VHTYBZSVTWAA260HNYCC
 effort: max
-order: 3
+order: 2
 created: '2026-07-20T15:47:46.526Z'
-updated: '2026-07-22T14:17:17.849Z'
+updated: '2026-07-22T16:24:28.566Z'
 ---
 Surface base and pal data in the dashboard by parsing the Palworld save. **Read-only.** Prefer the **logout-snapshot** trigger over live on-demand parsing.
 
@@ -38,15 +38,24 @@ This avoids racing the live save and matches the mental model (inspect without b
 3. **Backend** — `GET /api/bases` / logout reports returning, per base: location, owner, and pals with species, level, and status (working/hungry/injured/idle). Keep the response shape small; don't ship the raw GVAS blob.
 4. **Frontend** — Bases / logout-report panel: list bases, expand to see pals and status. Read-only.
 
+## Implementation notes (2026-07-22)
+- Spike confirmed fixtures are **PlM/Oodle (0.6+)**. Stock `cheahjs/palworld-save-tools@0.24.0` cannot read them.
+- Pinned **MRHRTZ fork + pyooz** in `parser/requirements.txt`; extract script `parser/extract_bases.py`.
+- Node: `server/saveReport.js` copies into `DASHBOARD_DATA_DIR/save-snapshots/`, parses async, caches `bases-report.json`, SSE `bases` event.
+- Hooks: autostop `fireStop` + `POST /api/stop`. Manual `POST /api/bases/refresh`.
+- UI: `BasesPanel` (“Bases at logout”).
+- Guild RawData custom decoder still EOF-fails on this save; base owners resolved via players sharing `group_id`.
+- Injured status not inferred yet (no reliable max-HP); hungry/working/idle are.
+
 ## Gotchas
 - Save format changes between Palworld versions — pin the parser version and fail loudly with a clear "unsupported save version" message rather than showing garbage.
 - Base ownership/pal ownership uses internal GUIDs; mapping to human names requires cross-referencing character save data — budget time for it, and degrade gracefully to GUIDs when a name can't be resolved.
 - Large worlds = large saves; guard parse time/memory and cache aggressively.
 
 ## Acceptance criteria
-- [ ] Snapshot taken on autostop / empty-world stop (copy, never mutate live)
-- [ ] Bases panel or logout report lists bases with owner + location
-- [ ] Expanding a base shows its pals with species, level, and status
-- [ ] Parsing never writes to the live save; unsupported versions produce a clear message
+- [x] Snapshot taken on autostop / empty-world stop (copy, never mutate live)
+- [x] Bases panel or logout report lists bases with owner + location
+- [x] Expanding a base shows its pals with species, level, and status
+- [x] Parsing never writes to the live save; unsupported versions produce a clear message
 
 Depends on [[Autostop idle timer + Start/Stop container]]. See [[mvp-working-spec]].

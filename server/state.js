@@ -3,6 +3,7 @@
 import { config } from './config.js'
 import { listBans } from './banlist.js'
 import { snapshot as autostopSnapshot } from './autostop.js'
+import { snapshotForClient as basesSnapshot } from './saveReport.js'
 
 const clients = new Set()
 
@@ -86,6 +87,7 @@ export function snapshotForClient() {
       bans: listBans(),
     },
     autostop: autostopSnapshot(),
+    bases: basesSnapshot(),
     logs: state.logBuffer,
   }
 }

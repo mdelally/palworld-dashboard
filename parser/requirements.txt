@@ -1,0 +1,4 @@
+# Palworld 0.6+ (PlM/Oodle) save support. Stock cheahjs/palworld-save-tools==0.24.0
+# only handles PlZ/zlib and cannot read current dedicated-server saves.
+palworld-save-tools @ git+https://github.com/MRHRTZ/palworld-save-tools.git@c42abc210d54b04b10adb46e0ac2332eb7563ef8
+pyooz @ git+https://github.com/MRHRTZ/pyooz.git@2973bcf022269206ffd9f7741ec889013a48acbc
