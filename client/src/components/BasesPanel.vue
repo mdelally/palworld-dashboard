@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { TabsItem } from '@nuxt/ui'
 import type { BaseCamp, BasePal, BasesReport } from '../types'
+import BaseResourcesTable from './BaseResourcesTable.vue'
 
 const props = defineProps<{
   report: BasesReport | null
@@ -12,6 +14,7 @@ const emit = defineEmits<{
 }>()
 
 const expanded = ref<Record<string, boolean>>({})
+const activeTabs = ref<Record<string, string>>({})
 
 const bases = computed(() => props.report?.bases ?? [])
 const hasReport = computed(
@@ -23,6 +26,34 @@ const isWorking = computed(() =>
 
 function toggle(id: string) {
   expanded.value = { ...expanded.value, [id]: !expanded.value[id] }
+}
+
+function baseTabItems(base: BaseCamp): TabsItem[] {
+  const resourceCount = base.resourceCount ?? base.resources?.length ?? 0
+  return [
+    {
+      label: 'Pals',
+      icon: 'i-lucide-paw-print',
+      value: 'pals',
+      slot: 'pals',
+      badge: base.palCount,
+    },
+    {
+      label: 'Resources',
+      icon: 'i-lucide-boxes',
+      value: 'resources',
+      slot: 'resources',
+      badge: resourceCount,
+    },
+  ]
+}
+
+function tabValue(baseId: string) {
+  return activeTabs.value[baseId] ?? 'pals'
+}
+
+function setTabValue(baseId: string, value: string | number) {
+  activeTabs.value = { ...activeTabs.value, [baseId]: String(value) }
 }
 
 function ownerLabel(base: BaseCamp) {
@@ -51,10 +82,6 @@ function humanize(value: string) {
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-function formatCount(n: number) {
-  return n.toLocaleString()
 }
 
 function statusColor(status: string) {
@@ -222,204 +249,203 @@ function updatedLabel() {
           v-if="expanded[base.id]"
           class="border-t border-default px-3 py-2"
         >
-          <div
-            v-if="base.resources?.length"
-            class="mb-3 space-y-1.5"
+          <UTabs
+            :model-value="tabValue(base.id)"
+            orientation="horizontal"
+            variant="pill"
+            size="sm"
+            :items="baseTabItems(base)"
+            :unmount-on-hide="false"
+            class="w-full gap-3"
+            :ui="{
+              list: 'w-full',
+              trigger: 'flex-1 justify-center',
+              content: 'pt-1',
+            }"
+            @update:model-value="setTabValue(base.id, $event)"
           >
-            <p class="text-[10px] font-medium uppercase tracking-wide text-primary">
-              Resources
-            </p>
-            <ul class="grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-2">
-              <li
-                v-for="res in base.resources"
-                :key="res.id"
-                class="flex items-baseline justify-between gap-2 text-xs"
+            <template #pals>
+              <div
+                v-if="!base.pals?.length"
+                class="py-2 text-xs text-muted"
               >
-                <span class="min-w-0 truncate text-muted">
-                  {{ humanize(res.id) }}
-                </span>
-                <span class="shrink-0 tabular-nums font-medium">
-                  ×{{ formatCount(res.count) }}
-                </span>
-              </li>
-            </ul>
-          </div>
-
-          <div
-            v-if="!base.pals?.length"
-            class="py-2 text-xs text-muted"
-          >
-            No pals assigned to this base’s worker slots.
-          </div>
-          <ul
-            v-else
-            class="divide-y divide-default"
-          >
-            <li
-              v-for="pal in base.pals"
-              :key="pal.instanceId || `${pal.species}-${pal.slotIndex}`"
-              class="flex gap-3 py-3"
-            >
-              <!-- Level block (game: left accent + big number) -->
-              <div class="w-12 shrink-0 border-l-2 border-primary pl-2">
-                <p class="text-[10px] font-medium uppercase tracking-wide text-primary">
-                  Level
-                </p>
-                <p class="text-xl font-semibold leading-none tabular-nums">
-                  {{ pal.level ?? '—' }}
-                </p>
+                No pals assigned to this base’s worker slots.
               </div>
+              <ul
+                v-else
+                class="divide-y divide-default"
+              >
+                <li
+                  v-for="pal in base.pals"
+                  :key="pal.instanceId || `${pal.species}-${pal.slotIndex}`"
+                  class="flex gap-3 py-3"
+                >
+                  <!-- Level block (game: left accent + big number) -->
+                  <div class="w-12 shrink-0 border-l-2 border-primary pl-2">
+                    <p class="text-[10px] font-medium uppercase tracking-wide text-primary">
+                      Level
+                    </p>
+                    <p class="text-xl font-semibold leading-none tabular-nums">
+                      {{ pal.level ?? '—' }}
+                    </p>
+                  </div>
 
-              <div class="min-w-0 flex-1 space-y-2">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold">
-                      {{ palDisplayName(pal) }}
-                    </p>
-                    <p
-                      v-if="pal.nickName"
-                      class="truncate text-xs text-muted"
-                    >
-                      {{ pal.species }}
-                    </p>
-                    <p
-                      v-if="pal.ownerName"
-                      class="truncate text-xs text-muted"
-                    >
-                      {{ pal.ownerName }}
-                    </p>
-                    <div
-                      v-if="(pal.rank != null && pal.rank > 0) || pal.isRare"
-                      class="mt-1 flex items-center gap-1.5"
-                    >
-                      <div
-                        v-if="pal.rank != null && pal.rank > 0"
-                        class="flex items-center gap-0.5"
-                        :title="`Rank ${pal.rank}`"
-                      >
-                        <UIcon
-                          v-for="i in rankStars(pal.rank).filled"
-                          :key="`f-${i}`"
-                          name="i-lucide-star"
-                          class="size-3 text-warning"
-                        />
-                        <UIcon
-                          v-for="i in rankStars(pal.rank).empty"
-                          :key="`e-${i}`"
-                          name="i-lucide-star"
-                          class="size-3 text-muted opacity-40"
-                        />
+                  <div class="min-w-0 flex-1 space-y-2">
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-semibold">
+                          {{ palDisplayName(pal) }}
+                        </p>
+                        <p
+                          v-if="pal.nickName"
+                          class="truncate text-xs text-muted"
+                        >
+                          {{ pal.species }}
+                        </p>
+                        <p
+                          v-if="pal.ownerName"
+                          class="truncate text-xs text-muted"
+                        >
+                          {{ pal.ownerName }}
+                        </p>
+                        <div
+                          v-if="(pal.rank != null && pal.rank > 0) || pal.isRare"
+                          class="mt-1 flex items-center gap-1.5"
+                        >
+                          <div
+                            v-if="pal.rank != null && pal.rank > 0"
+                            class="flex items-center gap-0.5"
+                            :title="`Rank ${pal.rank}`"
+                          >
+                            <UIcon
+                              v-for="i in rankStars(pal.rank).filled"
+                              :key="`f-${i}`"
+                              name="i-lucide-star"
+                              class="size-3 text-warning"
+                            />
+                            <UIcon
+                              v-for="i in rankStars(pal.rank).empty"
+                              :key="`e-${i}`"
+                              name="i-lucide-star"
+                              class="size-3 text-muted opacity-40"
+                            />
+                          </div>
+                          <UBadge
+                            v-if="pal.isRare"
+                            color="warning"
+                            variant="subtle"
+                            size="sm"
+                          >
+                            Rare
+                          </UBadge>
+                        </div>
                       </div>
                       <UBadge
-                        v-if="pal.isRare"
-                        color="warning"
+                        :color="statusColor(pal.status)"
+                        variant="subtle"
+                        size="sm"
+                        class="shrink-0"
+                      >
+                        {{ pal.status }}
+                      </UBadge>
+                    </div>
+
+                    <!-- HP / Hunger / SAN — game colors: green / orange / cyan -->
+                    <div class="space-y-1.5">
+                      <div
+                        v-if="pal.hp != null"
+                        class="flex items-center gap-2"
+                      >
+                        <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-success">
+                          HP
+                        </span>
+                        <div class="min-w-0 flex-1 rounded-sm bg-success/15 px-2 py-0.5">
+                          <p class="text-center text-xs font-medium tabular-nums text-success">
+                            {{ pal.hp }}
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        v-if="meterValue(pal.fullStomach) != null"
+                        class="flex items-center gap-2"
+                      >
+                        <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-warning">
+                          Hunger
+                        </span>
+                        <UProgress
+                          :model-value="meterValue(pal.fullStomach)!"
+                          :max="METER_MAX"
+                          color="warning"
+                          size="md"
+                          class="min-w-0 flex-1"
+                        />
+                        <span class="w-14 shrink-0 text-right text-xs tabular-nums text-muted">
+                          {{ meterValue(pal.fullStomach) }}/{{ METER_MAX }}
+                        </span>
+                      </div>
+                      <div
+                        v-if="meterValue(pal.sanity) != null"
+                        class="flex items-center gap-2"
+                      >
+                        <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-info">
+                          SAN
+                        </span>
+                        <UProgress
+                          :model-value="meterValue(pal.sanity)!"
+                          :max="METER_MAX"
+                          color="info"
+                          size="md"
+                          class="min-w-0 flex-1"
+                        />
+                        <span class="w-14 shrink-0 text-right text-xs tabular-nums text-muted">
+                          {{ meterValue(pal.sanity) }}/{{ METER_MAX }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div
+                      v-if="conditionBadges(pal).length"
+                      class="flex flex-wrap gap-1"
+                    >
+                      <UBadge
+                        v-for="badge in conditionBadges(pal)"
+                        :key="badge.label"
+                        :color="badge.color"
                         variant="subtle"
                         size="sm"
                       >
-                        Rare
+                        {{ badge.label }}
                       </UBadge>
                     </div>
-                  </div>
-                  <UBadge
-                    :color="statusColor(pal.status)"
-                    variant="subtle"
-                    size="sm"
-                    class="shrink-0"
-                  >
-                    {{ pal.status }}
-                  </UBadge>
-                </div>
 
-                <!-- HP / Hunger / SAN — game colors: green / orange / cyan -->
-                <div class="space-y-1.5">
-                  <div
-                    v-if="pal.hp != null"
-                    class="flex items-center gap-2"
-                  >
-                    <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-success">
-                      HP
-                    </span>
-                    <div class="min-w-0 flex-1 rounded-sm bg-success/15 px-2 py-0.5">
-                      <p class="text-center text-xs font-medium tabular-nums text-success">
-                        {{ pal.hp }}
+                    <div
+                      v-if="pal.passives?.length"
+                      class="space-y-1"
+                    >
+                      <p class="text-[10px] font-medium uppercase tracking-wide text-primary">
+                        Passive Skills
                       </p>
+                      <div class="flex flex-wrap gap-1">
+                        <UBadge
+                          v-for="passive in pal.passives"
+                          :key="passive"
+                          color="warning"
+                          variant="subtle"
+                          size="sm"
+                        >
+                          {{ humanize(passive) }}
+                        </UBadge>
+                      </div>
                     </div>
                   </div>
-                  <div
-                    v-if="meterValue(pal.fullStomach) != null"
-                    class="flex items-center gap-2"
-                  >
-                    <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-warning">
-                      Hunger
-                    </span>
-                    <UProgress
-                      :model-value="meterValue(pal.fullStomach)!"
-                      :max="METER_MAX"
-                      color="warning"
-                      size="md"
-                      class="min-w-0 flex-1"
-                    />
-                    <span class="w-14 shrink-0 text-right text-xs tabular-nums text-muted">
-                      {{ meterValue(pal.fullStomach) }}/{{ METER_MAX }}
-                    </span>
-                  </div>
-                  <div
-                    v-if="meterValue(pal.sanity) != null"
-                    class="flex items-center gap-2"
-                  >
-                    <span class="w-12 shrink-0 text-[10px] font-medium uppercase tracking-wide text-info">
-                      SAN
-                    </span>
-                    <UProgress
-                      :model-value="meterValue(pal.sanity)!"
-                      :max="METER_MAX"
-                      color="info"
-                      size="md"
-                      class="min-w-0 flex-1"
-                    />
-                    <span class="w-14 shrink-0 text-right text-xs tabular-nums text-muted">
-                      {{ meterValue(pal.sanity) }}/{{ METER_MAX }}
-                    </span>
-                  </div>
-                </div>
+                </li>
+              </ul>
+            </template>
 
-                <div
-                  v-if="conditionBadges(pal).length"
-                  class="flex flex-wrap gap-1"
-                >
-                  <UBadge
-                    v-for="badge in conditionBadges(pal)"
-                    :key="badge.label"
-                    :color="badge.color"
-                    variant="subtle"
-                    size="sm"
-                  >
-                    {{ badge.label }}
-                  </UBadge>
-                </div>
-
-                <div
-                  v-if="pal.passives?.length"
-                  class="space-y-1"
-                >
-                  <p class="text-[10px] font-medium uppercase tracking-wide text-primary">
-                    Passive Skills
-                  </p>
-                  <div class="flex flex-wrap gap-1">
-                    <UBadge
-                      v-for="passive in pal.passives"
-                      :key="passive"
-                      color="warning"
-                      variant="subtle"
-                      size="sm"
-                    >
-                      {{ humanize(passive) }}
-                    </UBadge>
-                  </div>
-                </div>
-              </div>
-            </li>
-          </ul>
+            <template #resources>
+              <BaseResourcesTable :resources="base.resources ?? []" />
+            </template>
+          </UTabs>
         </div>
       </div>
     </div>

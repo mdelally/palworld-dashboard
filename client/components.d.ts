@@ -14,6 +14,7 @@ declare module 'vue' {
     ActionsPanel: typeof import('./src/components/ActionsPanel.vue')['default']
     AutostopPanel: typeof import('./src/components/AutostopPanel.vue')['default']
     BansPanel: typeof import('./src/components/BansPanel.vue')['default']
+    BaseResourcesTable: typeof import('./src/components/BaseResourcesTable.vue')['default']
     BasesPanel: typeof import('./src/components/BasesPanel.vue')['default']
     ConfigEditorPanel: typeof import('./src/components/ConfigEditorPanel.vue')['default']
     LogPanel: typeof import('./src/components/LogPanel.vue')['default']
