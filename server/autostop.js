@@ -144,9 +144,9 @@ async function fireStop() {
     } catch (err) {
       console.warn('[autostop] save failed (continuing to stop):', err.message)
     }
-    // Copy Level.sav (+ Players) then parse the copy asynchronously. Never
-    // blocks the Docker stop, and never touches the live file after this point.
-    queueSnapshotAndParse({ trigger: 'autostop' })
+    // Copy after the save above. Inner snapshotAndParse also tries save()
+    // best-effort; skip the duplicate when the caller already flushed.
+    queueSnapshotAndParse({ trigger: 'autostop', saveBeforeSnapshot: false })
     await stopContainer({ timeoutSeconds: 30 })
     containerRunning = false
     containerStatus = 'exited'

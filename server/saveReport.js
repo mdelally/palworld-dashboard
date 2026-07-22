@@ -14,6 +14,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { config } from './config.js'
 import { broadcast } from './state.js'
+import { palworld } from './palworld.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const EXTRACT_SCRIPT = path.join(__dirname, '..', 'parser', 'extract_bases.py')
@@ -278,11 +279,15 @@ export async function loadCachedReport() {
 
 /**
  * Snapshot (optional) + parse. Concurrent calls share one in-flight promise.
+ *
+ * Safe while the game server is running: best-effort REST save() first, then
+ * copy Level.sav, then parse the copy (never the live file).
  */
 export async function snapshotAndParse({
   trigger = 'manual',
   skipSnapshot = false,
   levelSav = null,
+  saveBeforeSnapshot = true,
 } = {}) {
   if (parseInFlight) return parseInFlight
 
@@ -301,6 +306,21 @@ export async function snapshotAndParse({
           trigger,
           error: null,
         })
+
+        if (saveBeforeSnapshot) {
+          try {
+            await palworld.save()
+            // Brief settle so the dedicated server can flush Level.sav to disk
+            // before we copy. Best-effort; copy still proceeds if save fails.
+            await new Promise((resolve) => setTimeout(resolve, 1500))
+          } catch (err) {
+            console.warn(
+              '[saveReport] pre-snapshot save failed (continuing with copy):',
+              err.message,
+            )
+          }
+        }
+
         snap = await takeSaveSnapshot({ trigger })
       }
 

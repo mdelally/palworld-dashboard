@@ -118,23 +118,19 @@ Docker-stops the container, leaving it down until you hit Start.
 Settings persist in `autostop.json` under `DASHBOARD_DATA_DIR`. The UI shows a
 live countdown over SSE and can cancel an armed timer.
 
-### Bases at logout (save parsing)
+### Bases snapshot (save parsing)
 
-Palworld has no API for base/pal contents. On **autostop** or **manual Stop**
-the dashboard:
+Palworld has no API for base/pal contents. The dashboard:
 
-1. Requests a world `save()`
+1. Best-effort REST `save()` (when refreshing live, or already done on stop)
 2. **Copies** `Level.sav` (+ `LevelMeta.sav`, `Players/*.sav`) into
    `DASHBOARD_DATA_DIR/save-snapshots/<id>/` (never mutates the live save)
-3. Stops the game container
-4. Parses the **copy** with `parser/extract_bases.py` (Python /
-   MRHRTZ `palworld-save-tools` + Oodle via `pyooz`) and caches a compact report
+3. Parses the **copy** with `parser/extract_bases.py` and caches a compact report
 
-The UI “Bases at logout” panel lists each base (owner, location) and expands to
-show assigned pals (species, level, working/hungry). `GET /api/bases` returns
-the cached report; `POST /api/bases/refresh` takes a fresh snapshot+parse
-(token-gated). Unsupported save formats fail with a clear
-`unsupported_save_version` error instead of garbage data.
+Triggers: **Refresh** on the Bases panel (works while the server is running),
+**autostop**, and **manual Stop**. `GET /api/bases` returns the cached report;
+`POST /api/bases/refresh` takes a fresh snapshot+parse (token-gated).
+Unsupported save formats fail with `unsupported_save_version`.
 
 Mount the world folder read-only, e.g.:
 

@@ -104,9 +104,9 @@ function updatedLabel() {
     <template #header>
       <div class="flex items-start justify-between gap-3">
         <div>
-          <h2 class="text-base font-semibold">Bases at logout</h2>
+          <h2 class="text-base font-semibold">Bases snapshot</h2>
           <p class="text-xs text-muted">
-            Read-only snapshot from the last empty-world stop (never parses the live save)
+            Read-only report from a copied Level.sav (works while the server is up; refresh tries save first)
           </p>
         </div>
         <div class="flex items-center gap-2">
@@ -168,8 +168,8 @@ function updatedLabel() {
         v-if="!hasReport && !report?.error && !isWorking"
         class="text-sm text-muted"
       >
-        No logout report yet. After the world goes empty and the container stops
-        (autostop or Stop), a snapshot is copied and parsed here.
+        No snapshot yet. Use refresh anytime (even while the server is running),
+        or wait for the next autostop / Stop — both copy Level.sav then parse.
       </p>
 
       <p

@@ -333,8 +333,8 @@ export async function registerRoutes(app) {
       } catch (err) {
         request.log.warn({ err }, 'stop pre-flight save failed')
       }
-      // Same logout-snapshot path as autostop: copy then parse async.
-      queueSnapshotAndParse({ trigger: 'manual-stop' })
+      // Same snapshot path as autostop: caller already best-effort saved.
+      queueSnapshotAndParse({ trigger: 'manual-stop', saveBeforeSnapshot: false })
       await stopContainer({ timeoutSeconds: 30 })
       const snap = await refreshContainerState()
       broadcast('autostop', snap)
@@ -379,9 +379,9 @@ export async function registerRoutes(app) {
     return { ok: true, ...snap }
   })
 
-  // --- Phase 3: logout-snapshot bases / pals report -----------------------
-  // Read-only. Report is produced by copying Level.sav then parsing the copy
-  // with parser/extract_bases.py (never writes the live save).
+  // --- Phase 3: bases / pals report from a save snapshot --------------------
+  // Works while the server is running or stopped. Always copies Level.sav
+  // (after a best-effort REST save) and parses the copy — never the live file.
 
   app.get('/api/bases', async () => basesSnapshot())
 
@@ -401,8 +401,10 @@ export async function registerRoutes(app) {
       })
     }
     try {
-      // Manual refresh still snapshots first so we never parse a live mid-write file.
-      const state = await snapshotAndParse({ trigger: 'manual-refresh' })
+      const state = await snapshotAndParse({
+        trigger: 'manual-refresh',
+        saveBeforeSnapshot: true,
+      })
       return { ok: true, ...basesSnapshot(), parseStatus: state.status }
     } catch (err) {
       return reply.code(err.code === 'unsupported_save_version' ? 422 : 500).send({
