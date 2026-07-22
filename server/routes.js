@@ -2,7 +2,7 @@ import { config } from './config.js'
 import { palworld } from './palworld.js'
 import { state, addSseClient, snapshotForClient, broadcast } from './state.js'
 import { listBans, addBan, removeBan } from './banlist.js'
-import { restartContainer } from './dockerControl.js'
+import { restartContainer, startContainer, stopContainer } from './dockerControl.js'
 import {
   readConfigFile,
   writeConfigFile,
@@ -10,6 +10,13 @@ import {
   restoreConfigBackup,
 } from './configFile.js'
 import { refreshIni } from './poller.js'
+import {
+  snapshot as autostopSnapshot,
+  updateAutostopSettings,
+  cancelAutostop,
+  refreshContainerState,
+  ALLOWED_DELAY_MINUTES,
+} from './autostop.js'
 
 function validUserId(value) {
   return typeof value === 'string' && value.trim().length > 0
@@ -79,6 +86,7 @@ export async function registerRoutes(app) {
     reply.raw.write(`event: players\ndata: ${JSON.stringify(snap.players)}\n\n`)
     reply.raw.write(`event: settings\ndata: ${JSON.stringify(snap.settings)}\n\n`)
     reply.raw.write(`event: bans\ndata: ${JSON.stringify(snap.bans)}\n\n`)
+    reply.raw.write(`event: autostop\ndata: ${JSON.stringify(snap.autostop)}\n\n`)
     for (const entry of snap.logs) {
       reply.raw.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`)
     }
@@ -278,6 +286,8 @@ export async function registerRoutes(app) {
         await delay(grace * 1000)
       }
       await restartContainer()
+      const snap = await refreshContainerState()
+      broadcast('autostop', snap)
       broadcast('status', {
         palworldReachable: state.palworldReachable,
         error: state.error,
@@ -287,5 +297,76 @@ export async function registerRoutes(app) {
     } catch (err) {
       return reply.code(err.status || 502).send({ error: err.message })
     }
+  })
+
+  app.post('/api/start', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    try {
+      cancelAutostop('Autostop cancelled — manual start')
+      await startContainer()
+      const snap = await refreshContainerState()
+      broadcast('autostop', snap)
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: 'Container start issued',
+      })
+      return { ok: true, autostop: snap }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/stop', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    try {
+      cancelAutostop('Autostop cancelled — manual stop')
+      try {
+        await palworld.save()
+      } catch (err) {
+        request.log.warn({ err }, 'stop pre-flight save failed')
+      }
+      await stopContainer({ timeoutSeconds: 30 })
+      const snap = await refreshContainerState()
+      broadcast('autostop', snap)
+      broadcast('status', {
+        palworldReachable: state.palworldReachable,
+        error: state.error,
+        notice: 'Container stop issued',
+      })
+      return { ok: true, autostop: snap }
+    } catch (err) {
+      return reply.code(err.status || 502).send({ error: err.message })
+    }
+  })
+
+  app.get('/api/autostop', async () => autostopSnapshot())
+
+  app.put('/api/autostop', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const { enabled, delayMinutes } = request.body || {}
+    if (enabled !== undefined && typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'enabled must be a boolean' })
+    }
+    if (
+      delayMinutes !== undefined &&
+      !ALLOWED_DELAY_MINUTES.includes(Number(delayMinutes))
+    ) {
+      return reply.code(400).send({
+        error: `delayMinutes must be one of ${ALLOWED_DELAY_MINUTES.join(', ')}`,
+      })
+    }
+    try {
+      const snap = await updateAutostopSettings({ enabled, delayMinutes })
+      return { ok: true, ...snap }
+    } catch (err) {
+      return reply.code(err.status || 500).send({ error: err.message })
+    }
+  })
+
+  app.post('/api/autostop/cancel', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const snap = cancelAutostop('Autostop cancelled manually')
+    return { ok: true, ...snap }
   })
 }

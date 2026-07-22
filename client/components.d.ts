@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ActionsPanel: typeof import('./src/components/ActionsPanel.vue')['default']
+    AutostopPanel: typeof import('./src/components/AutostopPanel.vue')['default']
     BansPanel: typeof import('./src/components/BansPanel.vue')['default']
     ConfigEditorPanel: typeof import('./src/components/ConfigEditorPanel.vue')['default']
     LogPanel: typeof import('./src/components/LogPanel.vue')['default']
@@ -19,14 +20,6 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SettingsPanel: typeof import('./src/components/SettingsPanel.vue')['default']
-    UAlert: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Alert.vue')['default']
     UApp: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/App.vue')['default']
-    UBadge: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Badge.vue')['default']
-    UButton: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Button.vue')['default']
-    UCard: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Card.vue')['default']
-    UIcon: typeof import('./../node_modules/@nuxt/ui/dist/runtime/vue/components/Icon.vue')['default']
-    UInput: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Input.vue')['default']
-    UModal: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Modal.vue')['default']
-    UTable: typeof import('./../node_modules/@nuxt/ui/dist/runtime/components/Table.vue')['default']
   }
 }

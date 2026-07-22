@@ -11,6 +11,7 @@ import PlayersPanel from '../components/PlayersPanel.vue'
 import BansPanel from '../components/BansPanel.vue'
 import LogPanel from '../components/LogPanel.vue'
 import ActionsPanel from '../components/ActionsPanel.vue'
+import AutostopPanel from '../components/AutostopPanel.vue'
 import ConfigEditorPanel from '../components/ConfigEditorPanel.vue'
 import SettingsPanel from '../components/SettingsPanel.vue'
 
@@ -193,9 +194,18 @@ const isDark = computed({
           :busy="dash.actionBusy.value"
           :error="dash.actionError.value"
           :disabled="!dash.palworldReachable.value"
+          :container-running="dash.autostop.value?.containerRunning ?? null"
           @announce="dash.announce"
           @save="dash.saveWorld"
           @restart="dash.restartServer"
+          @start="dash.startServer"
+          @stop="dash.stopServer"
+        />
+        <AutostopPanel
+          :state="dash.autostop.value"
+          :busy="dash.actionBusy.value"
+          @update="dash.updateAutostop"
+          @cancel="dash.cancelAutostop"
         />
       </div>
       <div class="flex flex-col gap-6 lg:col-span-2">

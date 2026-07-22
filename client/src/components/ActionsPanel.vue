@@ -5,18 +5,24 @@ const props = defineProps<{
   busy: boolean
   error: string | null
   disabled?: boolean
+  /** null = unknown / no container configured */
+  containerRunning?: boolean | null
 }>()
 
 const emit = defineEmits<{
   announce: [message: string]
   save: []
   restart: []
+  start: []
+  stop: []
 }>()
 
 const message = ref('')
 const confirmOpen = ref(false)
 const restartOpen = ref(false)
 const restartConfirmText = ref('')
+const stopOpen = ref(false)
+const stopConfirmText = ref('')
 
 function submitAnnounce() {
   const text = message.value.trim()
@@ -45,6 +51,18 @@ function confirmRestart() {
   if (restartConfirmText.value.trim().toUpperCase() !== 'RESTART') return
   restartOpen.value = false
   emit('restart')
+}
+
+function requestStop() {
+  if (props.busy) return
+  stopConfirmText.value = ''
+  stopOpen.value = true
+}
+
+function confirmStop() {
+  if (stopConfirmText.value.trim().toUpperCase() !== 'STOP') return
+  stopOpen.value = false
+  emit('stop')
 }
 </script>
 
@@ -102,6 +120,22 @@ function confirmRestart() {
 
       <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
         <p class="text-xs text-muted">
+          Start brings the game container back online without going through Unraid.
+        </p>
+        <UButton
+          color="success"
+          variant="soft"
+          icon="i-lucide-play"
+          :loading="busy"
+          :disabled="containerRunning === true"
+          @click="emit('start')"
+        >
+          Start server
+        </UButton>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+        <p class="text-xs text-muted">
           Restart announces, saves, then restarts the game container. Works even
           when the server is unreachable.
         </p>
@@ -113,6 +147,22 @@ function confirmRestart() {
           @click="requestRestart"
         >
           Restart server
+        </UButton>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 border-t border-default pt-4">
+        <p class="text-xs text-muted">
+          Stop saves (best-effort) and leaves the container down until you start it.
+        </p>
+        <UButton
+          color="neutral"
+          variant="soft"
+          icon="i-lucide-square"
+          :loading="busy"
+          :disabled="containerRunning === false"
+          @click="requestStop"
+        >
+          Stop server
         </UButton>
       </div>
     </div>
@@ -165,6 +215,41 @@ function confirmRestart() {
             @click="confirmRestart"
           >
             Restart now
+          </UButton>
+        </div>
+      </template>
+    </UModal>
+
+    <UModal v-model:open="stopOpen" title="Stop the server?">
+      <template #body>
+        <div class="flex flex-col gap-3">
+          <p class="text-sm text-muted">
+            This saves the world (if reachable), then stops the game container and
+            leaves it down. Use Start server when you want it back.
+          </p>
+          <p class="text-sm text-muted">
+            Type <span class="font-mono font-semibold text-highlighted">STOP</span> to confirm.
+          </p>
+          <UInput
+            v-model="stopConfirmText"
+            placeholder="STOP"
+            autofocus
+            @keyup.enter="confirmStop"
+          />
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton color="neutral" variant="ghost" @click="stopOpen = false">
+            Cancel
+          </UButton>
+          <UButton
+            color="neutral"
+            icon="i-lucide-square"
+            :disabled="stopConfirmText.trim().toUpperCase() !== 'STOP'"
+            @click="confirmStop"
+          >
+            Stop now
           </UButton>
         </div>
       </template>

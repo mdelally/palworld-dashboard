@@ -7,6 +7,7 @@ import { registerRoutes } from './routes.js'
 import { startPoller, stopPoller } from './poller.js'
 import { startLogTail, stopLogTail } from './logTail.js'
 import { startDockerLogs, stopDockerLogs } from './dockerLogs.js'
+import { startAutostop, stopAutostop } from './autostop.js'
 
 // Choose the log source: docker (stream a container's stdout) or file (tail a
 // Pal.log). 'auto' uses docker whenever a container name is configured.
@@ -49,6 +50,7 @@ if (config.isProd) {
 }
 
 startPoller()
+startAutostop()
 app.log.info(
   {
     source: useDockerLogs
@@ -62,6 +64,7 @@ startLogs().catch((err) => app.log.warn({ err }, 'log streaming failed to start'
 
 const shutdown = async () => {
   stopPoller()
+  stopAutostop()
   stopLogs()
   await app.close()
   process.exit(0)

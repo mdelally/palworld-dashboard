@@ -44,8 +44,8 @@ Open http://\<unraid-ip\>:8787 (or via Tailscale).
 | `DASHBOARD_PORT` | `8787` | HTTP listen port |
 | `DASHBOARD_TOKEN` | empty | If set, required for all mutating actions |
 | `POLL_INTERVAL_MS` | `2000` | REST poll interval |
-| `PALWORLD_CONTAINER` | `palworld` | Game container name — used for log streaming and restart |
-| `DASHBOARD_DATA_DIR` | `/data` | Writable dir for dashboard state (local banlist). Mounted as a persistent volume in Docker |
+| `PALWORLD_CONTAINER` | `palworld` | Game container name — used for log streaming, restart/start/stop, and autostop |
+| `DASHBOARD_DATA_DIR` | `/data` | Writable dir for dashboard state (banlist, autostop settings). Mounted as a persistent volume in Docker |
 | `RESTART_GRACE_SECONDS` | `10` | Warning window (announce + save) before a restart takes the container down |
 | `LOG_SOURCE` | `auto` | `auto`/`docker`/`file` — `auto` streams the game container's stdout when `PALWORLD_CONTAINER` is set, else tails `PALWORLD_LOG_PATH` |
 | `LOG_EXCLUDE` | `/v1/api/` | Regex; matching log lines are hidden from the panel. Default hides the dashboard's own REST poll traffic. Set empty to see all |
@@ -85,13 +85,32 @@ named `palworld-dashboard-data` volume at `/data` so this survives restarts and
 image updates. Without a writable volume the banlist falls back to in-memory
 (bans still work; the list resets on restart).
 
-### Restart
+### Restart / start / stop
 
-The restart button (typed confirmation) announces a warning, saves the world,
-waits `RESTART_GRACE_SECONDS`, then restarts the game container via the mounted
-Docker socket (`POST /containers/<name>/restart`). It works even when the REST
-API is unreachable. Note: a read-only (`:ro`) docker.sock mount does **not**
-block this — `:ro` only protects the socket inode, not API calls sent over it.
+Admin actions control the game container via the mounted Docker socket
+(`PALWORLD_CONTAINER`):
+
+- **Restart** — typed confirmation; announces, saves, waits
+  `RESTART_GRACE_SECONDS`, then `POST /containers/<name>/restart`.
+- **Start** — `POST /containers/<name>/start` (brings a stopped container back
+  without going through Unraid).
+- **Stop** — best-effort save, then `POST /containers/<name>/stop` and leave it
+  down until Start (or Unraid) brings it back.
+
+These work even when the REST API is unreachable. Note: a read-only (`:ro`)
+docker.sock mount does **not** block this — `:ro` only protects the socket
+inode, not API calls sent over it.
+
+### Autostop
+
+When enabled, the dashboard watches the player list. After the last player
+leaves (a real N→0 transition, not dashboard boot into an empty world), it arms
+a configurable idle timer (30 / 45 / 60 / 120 minutes). If anyone joins before
+the timer fires, the countdown is cancelled. On expiry it saves the world and
+Docker-stops the container, leaving it down until you hit Start.
+
+Settings persist in `autostop.json` under `DASHBOARD_DATA_DIR`. The UI shows a
+live countdown over SSE and can cancel an armed timer.
 
 ## API
 
@@ -109,6 +128,11 @@ block this — `:ro` only protects the socket inode, not API calls sent over it.
 | POST | `/api/ban` | `{ "userid": "...", "name": "...", "message": "..." }` |
 | POST | `/api/unban` | `{ "userid": "..." }` |
 | POST | `/api/restart` | Announce + save + restart container |
+| POST | `/api/start` | Start game container |
+| POST | `/api/stop` | Save (best-effort) + stop game container |
+| GET | `/api/autostop` | Autostop settings + countdown state |
+| PUT | `/api/autostop` | `{ "enabled": true, "delayMinutes": 60 }` |
+| POST | `/api/autostop/cancel` | Cancel an armed countdown |
 
 ## Spec
 

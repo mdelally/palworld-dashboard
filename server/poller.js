@@ -2,6 +2,7 @@ import { config } from './config.js'
 import { palworld } from './palworld.js'
 import { readIniSummary } from './ini.js'
 import { state, broadcast } from './state.js'
+import { onPlayersTick } from './autostop.js'
 
 let timer = null
 let iniTimer = null
@@ -43,6 +44,8 @@ async function tick() {
       players: state.players,
       ts: state.updatedAt,
     })
+
+    onPlayersTick({ reachable: true, playerCount: state.players.length })
   } catch (err) {
     state.palworldReachable = false
     state.error = err.message || String(err)
@@ -51,6 +54,7 @@ async function tick() {
       palworldReachable: false,
       error: state.error,
     })
+    onPlayersTick({ reachable: false, playerCount: 0 })
   }
 }
 

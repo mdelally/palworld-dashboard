@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import type {
+  AutostopState,
   BanEntry,
   ConfigBackup,
   ConfigFile,
@@ -23,6 +24,7 @@ export function useDashboard() {
   const metrics = ref<ServerMetrics | null>(null)
   const players = ref<Player[]>([])
   const bans = ref<BanEntry[]>([])
+  const autostop = ref<AutostopState | null>(null)
   const settingsApi = ref<Record<string, unknown> | null>(null)
   const settingsIni = ref<IniSummary | null>(null)
   const logs = reactive<LogEntry[]>([])
@@ -153,6 +155,12 @@ export function useDashboard() {
       bans.value = Array.isArray(data.bans) ? data.bans : []
     })
 
+    es.addEventListener('autostop', (ev) => {
+      const data = JSON.parse((ev as MessageEvent).data) as AutostopState
+      autostop.value = data
+      if (data.notice) notice.value = data.notice
+    })
+
     es.addEventListener('log', (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as LogEntry
       pushLog(data)
@@ -201,6 +209,60 @@ export function useDashboard() {
     })
   }
 
+  async function startServer() {
+    await runAction(async () => {
+      await mutate('/api/start')
+      notice.value = 'Container start issued'
+    })
+  }
+
+  async function stopServer() {
+    await runAction(async () => {
+      await mutate('/api/stop')
+      notice.value = 'Container stop issued'
+    })
+  }
+
+  async function updateAutostop(patch: { enabled?: boolean; delayMinutes?: number }) {
+    await runAction(async () => {
+      const data = await mutate('/api/autostop', patch, 'PUT')
+      autostop.value = {
+        enabled: data.enabled,
+        delayMinutes: data.delayMinutes,
+        allowedDelayMinutes: data.allowedDelayMinutes,
+        armed: data.armed,
+        armedAt: data.armedAt,
+        deadlineAt: data.deadlineAt,
+        remainingMs: data.remainingMs,
+        stopping: data.stopping,
+        containerRunning: data.containerRunning,
+        containerStatus: data.containerStatus,
+      }
+      notice.value = data.enabled
+        ? `Autostop on — ${data.delayMinutes} min idle`
+        : 'Autostop disabled'
+    })
+  }
+
+  async function cancelAutostop() {
+    await runAction(async () => {
+      const data = await mutate('/api/autostop/cancel')
+      autostop.value = {
+        enabled: data.enabled,
+        delayMinutes: data.delayMinutes,
+        allowedDelayMinutes: data.allowedDelayMinutes,
+        armed: data.armed,
+        armedAt: data.armedAt,
+        deadlineAt: data.deadlineAt,
+        remainingMs: data.remainingMs,
+        stopping: data.stopping,
+        containerRunning: data.containerRunning,
+        containerStatus: data.containerStatus,
+      }
+      notice.value = 'Autostop cancelled'
+    })
+  }
+
   // --- Settings .ini editor (Phase 2) ---------------------------------------
   // These return data (not fire-and-forget), so the ConfigEditorPanel owns its
   // own loading/error state rather than the shared actionBusy flag.
@@ -240,6 +302,7 @@ export function useDashboard() {
     metrics,
     players,
     bans,
+    autostop,
     settingsApi,
     settingsIni,
     logs,
@@ -256,6 +319,10 @@ export function useDashboard() {
     banPlayer,
     unbanPlayer,
     restartServer,
+    startServer,
+    stopServer,
+    updateAutostop,
+    cancelAutostop,
     loadConfig,
     saveConfig,
     loadConfigBackups,

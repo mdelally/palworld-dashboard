@@ -1,3 +1,8 @@
+---
+title: Palworld Dashboard — MVP Working Spec
+created: '2026-07-19T18:17:03.324Z'
+updated: '2026-07-22T14:17:17.990Z'
+---
 # Palworld Dashboard — MVP Working Spec
 
 > Living document. Update this as decisions land. Build against this spec until MVP ships.
@@ -39,6 +44,9 @@ Repo: `/home/michael/palworld-dashboard`
 | 5. Announce + Save actions | Done |
 | 6. Settings read-only panel | Done |
 | 7. Docker polish + Unraid runbook | Done (`Dockerfile`, `docker-compose.yml`, `README.md`) |
+| 8. Phase 1 admin (kick/ban/unban/restart) | Done |
+| 9. Phase 2 settings.ini editor | In progress |
+| 10. Autostop idle timer + Start/Stop | Done |
 
 ### MVP acceptance criteria
 
@@ -69,6 +77,7 @@ PALWORLD_CONFIG_PATH=/data/PalWorldSettings.ini
 DASHBOARD_PORT=8787
 DASHBOARD_TOKEN=
 POLL_INTERVAL_MS=2000
+PALWORLD_CONTAINER=palworld
 ```
 
 ---
@@ -82,8 +91,16 @@ POLL_INTERVAL_MS=2000
 - `GET /api/events` (SSE)
 - `POST /api/announce` `{ message }`
 - `POST /api/save`
+- `POST /api/start` / `POST /api/stop` / `POST /api/restart` (Docker)
+- `GET|PUT /api/autostop` + `POST /api/autostop/cancel`
 
 Mutating routes optionally gated by `DASHBOARD_TOKEN`.
+
+---
+
+## Autostop
+
+When enabled: last player leaves → arm configurable delay (30/45/60/120 min) → on expiry `save()` + Docker stop (leave down). Join cancels. Start button brings container back. Settings in `autostop.json` under data dir.
 
 ---
 
@@ -104,6 +121,9 @@ data: { palworldReachable: boolean, error?: string }
 
 event: settings
 data: { api, ini, ts }
+
+event: autostop
+data: { enabled, delayMinutes, armed, deadlineAt, remainingMs, stopping, containerRunning, ... }
 ```
 
 ---
@@ -127,6 +147,7 @@ docker compose up -d --build
 | Single container vs nginx | **Single Node container** |
 | RCON | **REST only** |
 | Max players / name | Prefer API; fall back to ini |
+| Phase 3 parsing | Prefer snapshot-on-autostop, not live parse |
 
 ---
 
@@ -137,3 +158,4 @@ docker compose up -d --build
 | 2026-07-19 | Initial scaffold. |
 | 2026-07-19 | Locked Fastify, SSE, single-container; started implementation. |
 | 2026-07-19 | MVP implemented: Fastify API, SSE, log tail, Vue/Nuxt UI dashboard, Docker/Unraid docs. |
+| 2026-07-22 | Autostop idle timer + Start/Stop container; Phase 3 reframed as logout snapshot. |

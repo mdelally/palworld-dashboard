@@ -66,3 +66,17 @@ export interface ConfigBackup {
   size: number
   mtime: number
 }
+
+export interface AutostopState {
+  enabled: boolean
+  delayMinutes: number
+  allowedDelayMinutes: number[]
+  armed: boolean
+  armedAt: number | null
+  deadlineAt: number | null
+  remainingMs: number | null
+  stopping: boolean
+  containerRunning: boolean | null
+  containerStatus: string | null
+  notice?: string | null
+}
