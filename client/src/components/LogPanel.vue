@@ -37,7 +37,7 @@ watch(
 </script>
 
 <template>
-  <UCard class="flex min-h-[28rem] flex-1 flex-col" :ui="{ body: 'flex flex-1 flex-col p-0 sm:p-0' }">
+  <UCard class="flex min-h-[36rem] flex-1 flex-col" :ui="{ body: 'flex flex-1 flex-col p-0 sm:p-0' }">
     <template #header>
       <div class="flex flex-wrap items-center justify-between gap-2">
         <div>
@@ -69,7 +69,7 @@ watch(
 
     <div
       ref="scroller"
-      class="log-feed max-h-[32rem] flex-1 overflow-auto px-3 py-3 text-xs leading-5"
+      class="log-feed max-h-[48rem] flex-1 overflow-auto px-3 py-3 text-xs leading-5"
       @scroll="
         (e) => {
           const el = e.target as HTMLElement
