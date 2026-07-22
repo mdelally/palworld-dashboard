@@ -1,6 +1,7 @@
 # Save parser (Phase 3)
 
-Read-only extract of bases + assigned pals from a **copied** `Level.sav`.
+Read-only extract of bases, assigned pals, and **per-base resource totals**
+from a **copied** `Level.sav`.
 
 ## Why a Python sidecar
 
@@ -16,6 +17,13 @@ $PALWORLD_PARSER_PYTHON parser/extract_bases.py /path/to/copy/Level.sav
 
 Stdout is a single JSON object (`ok: true` report, or `ok: false` with an
 `unsupported_save_version` / parse error). The live save is never written.
+
+## What is extracted
+
+Per base: location, owners, worker pals (species/level/status), and aggregated
+item stacks from map objects that belong to that base (`base_camp_id_belong_to`
++ `ItemContainerSaveData`). Full `MapObjectSaveData` custom-decode is avoided
+(GuildSecurity EOF on 0.6+); Model + ItemContainer modules are decoded selectively.
 
 ## Local setup
 

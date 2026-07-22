@@ -104,6 +104,11 @@ export interface BasePal {
   status: string
 }
 
+export interface BaseResource {
+  id: string
+  count: number
+}
+
 export interface BaseCamp {
   id: string
   name?: string | null
@@ -118,6 +123,8 @@ export interface BaseCamp {
   workerContainerId?: string | null
   palCount: number
   pals: BasePal[]
+  resourceCount?: number
+  resources?: BaseResource[]
 }
 
 export interface BasesReport {
@@ -130,6 +137,7 @@ export interface BasesReport {
     baseCount?: number
     playerCount?: number
     palAtBases?: number
+    resourceTypesAtBases?: number
   } | null
   players?: Array<{
     playerUid: string

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract a compact bases/pals report from a Palworld Level.sav copy.
+"""Extract a compact bases/pals/resources report from a Palworld Level.sav copy.
 
 Read-only. Prints one JSON object to stdout. Never writes the input .sav.
 
@@ -22,9 +22,11 @@ HUNGRY_STOMACH = 30.0
 # Pocketpair default base names look like 新規生成拠点テンプレート名0(仮)
 DEFAULT_BASE_NAME_MARKERS = ("新規生成拠点", "テンプレート名")
 
-# Selective custom-property decode: full decode still dies on some MapObject
-# modules in 0.6+. Bases + characters + work are enough for this report.
-CUSTOM_PREFIXES = ("BaseCamp", "CharacterSave", "WorkSave")
+# Selective custom-property decode: full MapObject decode still dies on
+# GuildSecurity (and similar) modules in 0.6+. Item containers are safe;
+# map-object → base links are decoded per-object below (Model + ItemContainer
+# module only).
+CUSTOM_PREFIXES = ("BaseCamp", "CharacterSave", "WorkSave", "ItemContainer")
 
 
 def fail(code: str, message: str, *, details: str | None = None, exit_code: int = 2) -> None:
@@ -152,6 +154,158 @@ def soft_base_name(
     if owner_names:
         return f"Base {index} ({', '.join(owner_names[:2])})"
     return f"Base {index}"
+
+
+class _ArchiveParent:
+    """Minimal parent for palworld-save-tools rawdata decode_bytes helpers."""
+
+    def internal_copy(self, data: bytes, debug: bool = False):
+        from palworld_save_tools.archive import FArchiveReader
+
+        return FArchiveReader(data, debug=debug)
+
+
+def _map_object_list(wsd: dict[str, Any]) -> list[Any]:
+    mos = prop(wsd.get("MapObjectSaveData"))
+    if isinstance(mos, dict):
+        vals = mos.get("values")
+        if isinstance(vals, list):
+            return vals
+        inner = mos.get("value")
+        if isinstance(inner, dict) and isinstance(inner.get("values"), list):
+            return inner["values"]
+        if isinstance(inner, list):
+            return inner
+    if isinstance(mos, list):
+        return mos
+    return []
+
+
+def extract_items_by_container(wsd: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """container_id → { static_id → count } for nonempty item containers."""
+    out: dict[str, dict[str, int]] = {}
+    for entry in wsd.get("ItemContainerSaveData", {}).get("value", []) or []:
+        cid = as_str(entry.get("key"))
+        if not cid:
+            continue
+        slots_wrap = prop((entry.get("value") or {}).get("Slots"))
+        if not isinstance(slots_wrap, dict):
+            continue
+        slots = slots_wrap.get("values")
+        if not isinstance(slots, list):
+            continue
+        stacks: dict[str, int] = defaultdict(int)
+        for slot in slots:
+            if not isinstance(slot, dict):
+                continue
+            raw_slot = (slot.get("RawData") or {}).get("value")
+            if not isinstance(raw_slot, dict):
+                continue
+            item = raw_slot.get("item") or {}
+            static_id = item.get("static_id") if isinstance(item, dict) else None
+            count = raw_slot.get("count") or 0
+            if (
+                isinstance(static_id, str)
+                and static_id
+                and static_id not in ("None", "None_")
+                and isinstance(count, int)
+                and count > 0
+            ):
+                stacks[static_id] += count
+        if stacks:
+            out[cid] = dict(stacks)
+    return out
+
+
+def extract_container_base_ids(wsd: dict[str, Any]) -> dict[str, str]:
+    """ItemContainer module target_container_id → base_camp_id_belong_to.
+
+    Avoids the full MapObject custom decoder (GuildSecurity EOF). Decodes each
+    object's Model RawData + ItemContainer module bytes only.
+    """
+    from palworld_save_tools.archive import FArchiveReader
+    from palworld_save_tools.rawdata import map_concrete_model_module, map_model
+
+    parent = _ArchiveParent()
+    links: dict[str, str] = {}
+
+    for obj in _map_object_list(wsd):
+        if not isinstance(obj, dict):
+            continue
+        model = prop(obj.get("Model")) or {}
+        if not isinstance(model, dict):
+            continue
+        mraw = prop(model.get("RawData"))
+        if not isinstance(mraw, dict) or "values" not in mraw:
+            continue
+        try:
+            decoded_model = map_model.decode_bytes(parent, mraw["values"])
+        except Exception:
+            continue
+        if not isinstance(decoded_model, dict):
+            continue
+        base_camp_id = as_str(decoded_model.get("base_camp_id_belong_to"))
+        if not base_camp_id or base_camp_id == ZERO_UUID:
+            continue
+
+        concrete = prop(obj.get("ConcreteModel")) or {}
+        if not isinstance(concrete, dict):
+            continue
+        mmap = prop(concrete.get("ModuleMap"))
+        modules: list[Any] = []
+        if isinstance(mmap, list):
+            modules = mmap
+        elif isinstance(mmap, dict):
+            if isinstance(mmap.get("value"), list):
+                modules = mmap["value"]
+            elif isinstance(mmap.get("values"), list):
+                modules = mmap["values"]
+
+        for mod in modules:
+            if not isinstance(mod, dict):
+                continue
+            if mod.get("key") != "EPalMapObjectConcreteModelModuleType::ItemContainer":
+                continue
+            mbytes_wrap = prop((mod.get("value") or {}).get("RawData"))
+            if not isinstance(mbytes_wrap, dict) or "values" not in mbytes_wrap:
+                continue
+            tid: str | None = None
+            try:
+                md = map_concrete_model_module.decode_bytes(
+                    parent, mbytes_wrap["values"], mod["key"]
+                )
+                if isinstance(md, dict):
+                    tid = as_str(md.get("target_container_id"))
+            except Exception:
+                try:
+                    reader = FArchiveReader(bytes(mbytes_wrap["values"]))
+                    tid = as_str(reader.guid())
+                except Exception:
+                    continue
+            if tid and tid != ZERO_UUID:
+                links[tid] = base_camp_id
+
+    return links
+
+
+def resources_for_base(
+    base_id: str | None,
+    *,
+    items_by_container: dict[str, dict[str, int]],
+    container_base_ids: dict[str, str],
+) -> list[dict[str, Any]]:
+    if not base_id:
+        return []
+    totals: dict[str, int] = defaultdict(int)
+    for cid, stacks in items_by_container.items():
+        if container_base_ids.get(cid) != base_id:
+            continue
+        for static_id, count in stacks.items():
+            totals[static_id] += count
+    return [
+        {"id": item_id, "count": count}
+        for item_id, count in sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 def classify_status(
@@ -342,6 +496,9 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             if owner and owner.get("name"):
                 pal["ownerName"] = owner["name"]
 
+    items_by_container = extract_items_by_container(wsd)
+    container_base_ids = extract_container_base_ids(wsd)
+
     bases: list[dict[str, Any]] = []
     for base_index, entry in enumerate(
         wsd.get("BaseCampSaveData", {}).get("value", []) or [],
@@ -389,6 +546,12 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             )
         )
 
+        resources = resources_for_base(
+            base_id,
+            items_by_container=items_by_container,
+            container_base_ids=container_base_ids,
+        )
+
         bases.append(
             {
                 "id": base_id,
@@ -410,6 +573,8 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
                 "workerContainerId": worker_container,
                 "palCount": len(pals),
                 "pals": pals,
+                "resourceCount": len(resources),
+                "resources": resources,
             }
         )
 
@@ -449,6 +614,7 @@ def extract_report(level_sav: Path) -> dict[str, Any]:
             "baseCount": len(bases),
             "playerCount": len(players_by_uid),
             "palAtBases": sum(b["palCount"] for b in bases),
+            "resourceTypesAtBases": sum(b["resourceCount"] for b in bases),
         },
     }
 

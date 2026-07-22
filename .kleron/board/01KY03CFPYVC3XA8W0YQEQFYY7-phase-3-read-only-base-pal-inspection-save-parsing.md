@@ -14,7 +14,7 @@ dependsOn:
 effort: max
 order: 2
 created: '2026-07-20T15:47:46.526Z'
-updated: '2026-07-22T16:24:28.566Z'
+updated: '2026-07-22T19:26:30.926Z'
 ---
 Surface base and pal data in the dashboard by parsing the Palworld save. **Read-only.** Prefer the **logout-snapshot** trigger over live on-demand parsing.
 
@@ -46,6 +46,7 @@ This avoids racing the live save and matches the mental model (inspect without b
 - UI: `BasesPanel` (“Bases at logout”).
 - Guild RawData custom decoder still EOF-fails on this save; base owners resolved via players sharing `group_id`.
 - Injured status not inferred yet (no reliable max-HP); hungry/working/idle are.
+- **Per-base resources (2026-07-22):** each base now includes `resources: [{ id, count }, …]` aggregated from map objects with `base_camp_id_belong_to` + `ItemContainerSaveData`. Full MapObject custom-decode still skipped (GuildSecurity); Model + ItemContainer modules decoded selectively. Verified on fixture (e.g. Stone ×6053, CopperOre ×1212, PalFluid ×106).
 
 ## Gotchas
 - Save format changes between Palworld versions — pin the parser version and fail loudly with a clear "unsupported save version" message rather than showing garbage.
@@ -57,5 +58,6 @@ This avoids racing the live save and matches the mental model (inspect without b
 - [x] Bases panel or logout report lists bases with owner + location
 - [x] Expanding a base shows its pals with species, level, and status
 - [x] Parsing never writes to the live save; unsupported versions produce a clear message
+- [x] Expanding a base shows aggregated resource totals (Ore, Pal Fluid, etc.)
 
 Depends on [[Autostop idle timer + Start/Stop container]]. See [[mvp-working-spec]].

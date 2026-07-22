@@ -1,7 +1,7 @@
 ---
 title: Palworld Dashboard — MVP Working Spec
 created: '2026-07-19T18:17:03.324Z'
-updated: '2026-07-22T16:24:28.646Z'
+updated: '2026-07-22T19:26:20.196Z'
 ---
 # Palworld Dashboard — MVP Working Spec
 
@@ -49,6 +49,7 @@ Repo: `/home/michael/palworld-dashboard`
 | 9. Phase 2 settings.ini editor | In progress |
 | 10. Autostop idle timer + Start/Stop | Done |
 | 11. Phase 3 bases at logout (save snapshot + parse) | Done (read-only) |
+| 12. Per-base resource totals from save | Done (chests/stations via `base_camp_id_belong_to`) |
 
 ### MVP acceptance criteria
 
@@ -111,7 +112,7 @@ When enabled: last player leaves → arm configurable delay (30/45/60/120 min) �
 
 ## Bases at logout (Phase 3)
 
-On autostop / manual stop: copy `Level.sav` (+ Players) into `DASHBOARD_DATA_DIR/save-snapshots/`, parse the copy with `parser/extract_bases.py`, cache report, SSE `bases`. UI panel lists bases (owner, location) and expands pals (species, level, working/hungry). Never writes the live save.
+On autostop / manual stop: copy `Level.sav` (+ Players) into `DASHBOARD_DATA_DIR/save-snapshots/`, parse the copy with `parser/extract_bases.py`, cache report, SSE `bases`. UI panel lists bases (owner, location) and expands pals (species, level, working/hungry) plus **aggregated resource totals** from base-owned chests/stations. Never writes the live save.
 
 ---
 
@@ -175,3 +176,4 @@ docker compose up -d --build
 | 2026-07-19 | MVP implemented: Fastify API, SSE, log tail, Vue/Nuxt UI dashboard, Docker/Unraid docs. |
 | 2026-07-22 | Autostop idle timer + Start/Stop container; Phase 3 reframed as logout snapshot. |
 | 2026-07-22 | Phase 3 implemented: PlM parser sidecar, snapshot-on-stop, `/api/bases`, Bases panel. |
+| 2026-07-22 | Per-base resource totals (ItemContainer + selective MapObject decode). |
