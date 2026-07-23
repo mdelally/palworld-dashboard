@@ -123,11 +123,11 @@ async function copyDirFiltered(srcDir, destDir) {
 }
 
 /**
- * Copy the live world folder into a timestamped snapshot directory.
- * Never mutates the source.
+ * Copy the live world folder (Level.sav + LevelMeta.sav + Players/*.sav) into
+ * destDir. Never mutates the source. Shared by snapshots, migration backups,
+ * and mutable working copies (see server/saveMigration.js).
  */
-export async function takeSaveSnapshot({ trigger = 'manual' } = {}) {
-  void trigger
+export async function copyWorldFolder(destDir) {
   const resolved = await resolveLevelSav()
   if (!resolved) {
     const err = new Error(
@@ -138,26 +138,32 @@ export async function takeSaveSnapshot({ trigger = 'manual' } = {}) {
     err.code = 'save_path_unavailable'
     throw err
   }
-
-  const snapshotId = new Date().toISOString().replace(/[:.]/g, '-')
-  const dest = path.join(snapshotsRoot(), snapshotId)
-  await mkdir(dest, { recursive: true })
-
-  await copyFile(resolved.levelSav, path.join(dest, 'Level.sav'))
+  await mkdir(destDir, { recursive: true })
+  await copyFile(resolved.levelSav, path.join(destDir, 'Level.sav'))
   const meta = path.join(resolved.worldDir, 'LevelMeta.sav')
   if (await pathExists(meta)) {
-    await copyFile(meta, path.join(dest, 'LevelMeta.sav'))
+    await copyFile(meta, path.join(destDir, 'LevelMeta.sav'))
   }
   const playersSrc = path.join(resolved.worldDir, 'Players')
   if (await pathExists(playersSrc)) {
-    await copyDirFiltered(playersSrc, path.join(dest, 'Players'))
+    await copyDirFiltered(playersSrc, path.join(destDir, 'Players'))
   }
+  return { worldDir: resolved.worldDir, destDir, levelSav: path.join(destDir, 'Level.sav') }
+}
 
+/**
+ * Copy the live world folder into a timestamped snapshot directory.
+ * Never mutates the source.
+ */
+export async function takeSaveSnapshot({ trigger = 'manual' } = {}) {
+  void trigger
+  const snapshotId = new Date().toISOString().replace(/[:.]/g, '-')
+  const dest = path.join(snapshotsRoot(), snapshotId)
+  const { levelSav } = await copyWorldFolder(dest)
   await pruneSnapshots(config.palworld.snapshotKeep).catch((err) => {
     console.warn('[saveReport] prune failed:', err.message)
   })
-
-  return { snapshotId, snapshotPath: dest, levelSav: path.join(dest, 'Level.sav') }
+  return { snapshotId, snapshotPath: dest, levelSav }
 }
 
 async function pruneSnapshots(keep) {
@@ -177,17 +183,27 @@ async function pruneSnapshots(keep) {
   }
 }
 
-function resolvePythonBin() {
+export function resolvePythonBin() {
   if (config.palworld.parserPython) return config.palworld.parserPython
   return path.join(__dirname, '..', '.venv-save-tools', 'bin', 'python')
 }
 
-async function runExtract(levelSav) {
+/**
+ * Spawn a parser script and parse its single-line JSON stdout. Rejects on
+ * timeout, non-JSON output, or a `{ ok: false }` payload (surfacing the
+ * script's own error code/message). Shared by the bases report and the
+ * migration tooling (roundtrip_test.py / migrate_uid.py).
+ */
+export async function runParserJson(
+  scriptPath,
+  args = [],
+  { timeoutMs = config.palworld.parserTimeoutMs } = {},
+) {
   const preferred = resolvePythonBin()
   const bin = (await pathExists(preferred)) ? preferred : 'python3'
 
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, [EXTRACT_SCRIPT, levelSav], {
+    const child = spawn(bin, [scriptPath, ...args], {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'],
     })
@@ -195,10 +211,10 @@ async function runExtract(levelSav) {
     let stderr = ''
     const timeout = setTimeout(() => {
       child.kill('SIGKILL')
-      const err = new Error(`Parser timed out after ${config.palworld.parserTimeoutMs}ms`)
+      const err = new Error(`Parser timed out after ${timeoutMs}ms`)
       err.code = 'parser_timeout'
       reject(err)
-    }, config.palworld.parserTimeoutMs)
+    }, timeoutMs)
 
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
@@ -239,6 +255,10 @@ async function runExtract(levelSav) {
       resolve(parsed)
     })
   })
+}
+
+async function runExtract(levelSav) {
+  return runParserJson(EXTRACT_SCRIPT, [levelSav])
 }
 
 async function persistReportCache(state) {

@@ -127,6 +127,68 @@ export interface BaseCamp {
   resources?: BaseResource[]
 }
 
+export interface MigrationDiff {
+  field: string
+  detail?: string
+  sourceValue?: string
+  targetValue?: string
+  changeType?: 'added' | 'removed' | 'modified' | 'renamed' | string
+  count?: number
+}
+
+export interface MigrationEndpoint {
+  uid: string
+  hex?: string
+  instanceId?: string | null
+  playersFile?: string
+  playersFileExists?: boolean
+  inLevel?: boolean
+  ownedPalCount?: number
+}
+
+export interface MigrationPreview {
+  sourceUid?: string
+  targetUid?: string
+  source?: MigrationEndpoint
+  target?: MigrationEndpoint
+  diffs?: MigrationDiff[]
+  warnings?: string[]
+}
+
+export interface MigrationSelftest {
+  identical?: boolean
+  mode?: string
+  firstDiffOffset?: number | null
+  sizes?: { original?: number; roundtripped?: number; recompressedSav?: number }
+  source?: { levelSav?: string; magic?: string; saveType?: number }
+}
+
+export interface MigrationBackup {
+  backupId: string
+  createdAt?: number | null
+  trigger?: string | null
+  sourceUid?: string | null
+  targetUid?: string | null
+  playerFiles?: number
+}
+
+export interface MigrationState {
+  status: 'idle' | 'busy' | 'ready' | 'error' | string
+  phase: 'selftest' | 'preview' | 'apply' | 'rollback' | 'backup' | null
+  updatedAt: number | null
+  selftest?: MigrationSelftest | null
+  preview?: MigrationPreview | null
+  lastApply?: {
+    backupId: string
+    sourceUid: string
+    targetUid: string
+    promotedAt: number
+  } | null
+  lastRestore?: { backupId: string; safetyBackupId: string; restoredAt: number } | null
+  lastBackup?: { backupId: string; createdAt: number; trigger?: string } | null
+  error?: { code?: string; message: string; details?: string | null } | null
+}
+
 export interface BasesReport {
   status: 'idle' | 'snapshotting' | 'parsing' | 'ready' | 'error' | 'unavailable' | string
   updatedAt: number | null

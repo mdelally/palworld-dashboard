@@ -7,6 +7,8 @@ import type {
   ConfigFile,
   IniSummary,
   LogEntry,
+  MigrationBackup,
+  MigrationState,
   Player,
   ServerInfo,
   ServerMetrics,
@@ -31,6 +33,7 @@ export function useDashboard() {
   const bans = ref<BanEntry[]>([])
   const autostop = ref<AutostopState | null>(null)
   const bases = ref<BasesReport | null>(null)
+  const migration = ref<MigrationState | null>(null)
   const settingsApi = ref<Record<string, unknown> | null>(null)
   const settingsIni = ref<IniSummary | null>(null)
   const logs = reactive<LogEntry[]>([])
@@ -188,6 +191,11 @@ export function useDashboard() {
       bases.value = data
     })
 
+    es.addEventListener('migration', (ev) => {
+      const data = JSON.parse((ev as MessageEvent).data) as MigrationState
+      migration.value = data
+    })
+
     es.addEventListener('log', (ev) => {
       const data = JSON.parse((ev as MessageEvent).data) as LogEntry
       pushLog(data)
@@ -323,6 +331,28 @@ export function useDashboard() {
     return mutate('/api/config/restore', { name })
   }
 
+  // --- Save migration (Stage 3) ---------------------------------------------
+  // Like the config editor, the MigrationPanel owns its per-button busy/error
+  // state; live status flows in via the `migration` SSE ref above.
+  function migrationSelftest(mode: 'migrate' | 'full' = 'migrate') {
+    return mutate('/api/migration/selftest', { mode })
+  }
+  function previewMigration(sourceUid: string, targetUid: string) {
+    return mutate('/api/migration/preview', { sourceUid, targetUid })
+  }
+  function applyMigration(sourceUid: string, targetUid: string) {
+    return mutate('/api/migration/apply', { sourceUid, targetUid, confirm: true })
+  }
+  function rollbackMigration(backupId: string) {
+    return mutate('/api/migration/rollback', { backupId })
+  }
+  function createMigrationBackup() {
+    return mutate('/api/migration/backup')
+  }
+  function loadMigrationBackups(): Promise<{ backups: MigrationBackup[] }> {
+    return getJson('/api/migration/backups') as Promise<{ backups: MigrationBackup[] }>
+  }
+
   onMounted(() => connect())
   onUnmounted(() => {
     es?.close()
@@ -341,6 +371,7 @@ export function useDashboard() {
     bans,
     autostop,
     bases,
+    migration,
     settingsApi,
     settingsIni,
     logs,
@@ -367,6 +398,12 @@ export function useDashboard() {
     saveConfig,
     loadConfigBackups,
     restoreConfig,
+    migrationSelftest,
+    previewMigration,
+    applyMigration,
+    rollbackMigration,
+    createMigrationBackup,
+    loadMigrationBackups,
   }
 }
 

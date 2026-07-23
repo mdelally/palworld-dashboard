@@ -49,9 +49,13 @@ services:
       # from the UI. Requires a container UID that can write the file (this stack
       # runs as root; see the `user:` note above).
       - /mnt/user/appdata/palworld/Pal/Saved/Config/LinuxServer/PalWorldSettings.ini:/data/PalWorldSettings.ini:rw
-      # Read-only mount of the active world save (folder that contains Level.sav).
-      # Adjust the host path / world id to match your server.
-      - /mnt/user/appdata/palworld/Pal/Saved/SaveGames/0/75D4220D2E304791995D2E787E4B4856:/data/saves:ro
+      # Read-write mount of the active world save (folder that contains Level.sav).
+      # :rw is required by the Save Migration tool, which writes the migrated
+      # Level.sav + Players/*.sav back in place (game server stopped, after a
+      # backup + validation). The read-only bases snapshot never writes here.
+      # Same trust model as the PalWorldSettings.ini mount above. Adjust the host
+      # path / world id to match your server.
+      - /mnt/user/appdata/palworld/Pal/Saved/SaveGames/0/75D4220D2E304791995D2E787E4B4856:/data/saves:rw
     # Redundant while user is root (root can already reach the socket); kept for
     # anyone who switches back to a non-root user. Find it: getent group docker
     group_add:

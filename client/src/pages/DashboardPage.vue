@@ -15,6 +15,7 @@ import LogPanel from "../components/LogPanel.vue";
 import ActionsPanel from "../components/ActionsPanel.vue";
 import AutostopPanel from "../components/AutostopPanel.vue";
 import BasesPanel from "../components/BasesPanel.vue";
+import MigrationPanel from "../components/MigrationPanel.vue";
 import ConfigEditorPanel from "../components/ConfigEditorPanel.vue";
 import SettingsPanel from "../components/SettingsPanel.vue";
 import MetricSparkline from "../components/MetricSparkline.vue";
@@ -95,6 +96,7 @@ const tabs: TabsItem[] = [
   { label: "Bans", icon: "i-lucide-ban", value: "bans", slot: "bans" },
   { label: "Controls", icon: "i-lucide-sliders-horizontal", value: "controls", slot: "controls" },
   { label: "Bases", icon: "i-lucide-tent", value: "bases", slot: "bases" },
+  { label: "Migration", icon: "i-lucide-arrow-right-left", value: "migration", slot: "migration" },
   { label: "Config", icon: "i-lucide-file-code", value: "config", slot: "config" },
   { label: "Settings", icon: "i-lucide-settings", value: "settings", slot: "settings" },
 ];
@@ -338,6 +340,21 @@ const tabs: TabsItem[] = [
           :report="dash.bases.value"
           :busy="dash.actionBusy.value"
           @refresh="dash.refreshBases"
+        />
+      </template>
+
+      <template #migration>
+        <MigrationPanel
+          :state="dash.migration.value"
+          :players="dash.bases.value?.players"
+          :container-running="dash.autostop.value?.containerRunning ?? null"
+          :has-token="!!dash.dashboardToken.value"
+          :selftest="dash.migrationSelftest"
+          :preview="dash.previewMigration"
+          :apply="dash.applyMigration"
+          :rollback="dash.rollbackMigration"
+          :create-backup="dash.createMigrationBackup"
+          :load-backups="dash.loadMigrationBackups"
         />
       </template>
 

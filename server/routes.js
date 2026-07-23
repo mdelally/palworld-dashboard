@@ -23,6 +23,15 @@ import {
   queueSnapshotAndParse,
   resolveLevelSav,
 } from './saveReport.js'
+import {
+  snapshotForClient as migrationSnapshot,
+  runSelftest,
+  runPreview,
+  applyMigration,
+  rollbackMigration,
+  runBackup,
+  listBackups,
+} from './saveMigration.js'
 
 function validUserId(value) {
   return typeof value === 'string' && value.trim().length > 0
@@ -94,6 +103,7 @@ export async function registerRoutes(app) {
     reply.raw.write(`event: bans\ndata: ${JSON.stringify(snap.bans)}\n\n`)
     reply.raw.write(`event: autostop\ndata: ${JSON.stringify(snap.autostop)}\n\n`)
     reply.raw.write(`event: bases\ndata: ${JSON.stringify(snap.bases)}\n\n`)
+    reply.raw.write(`event: migration\ndata: ${JSON.stringify(migrationSnapshot())}\n\n`)
     for (const entry of snap.logs) {
       reply.raw.write(`event: log\ndata: ${JSON.stringify(entry)}\n\n`)
     }
@@ -413,6 +423,97 @@ export async function registerRoutes(app) {
         details: err.details || null,
         ...basesSnapshot(),
       })
+    }
+  })
+
+  // --- Save migration (Xbox → Steam UID re-point) --------------------------
+  // Stop the game container first. Every write is backed up and the migrated
+  // save is re-parsed before it's promoted over the live file. All POST
+  // actions are token-guarded (they spawn the parser and/or write the save).
+
+  app.get('/api/migration', async () => migrationSnapshot())
+
+  app.get('/api/migration/backups', async () => ({ backups: await listBackups() }))
+
+  app.post('/api/migration/backup', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    try {
+      const state = await runBackup()
+      return {
+        ok: true,
+        ...migrationSnapshot(),
+        backups: await listBackups(),
+        migrationStatus: state.status,
+      }
+    } catch (err) {
+      return migrationError(reply, err, 'backup_failed')
+    }
+  })
+
+  const migrationError = (reply, err, fallbackCode) =>
+    reply.code(err.status || 500).send({
+      error: err.message,
+      code: err.code || fallbackCode,
+      details: err.details || null,
+      ...migrationSnapshot(),
+    })
+
+  app.post('/api/migration/selftest', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const mode = request.body?.mode === 'full' ? 'full' : 'migrate'
+    try {
+      const state = await runSelftest({ mode })
+      return { ok: true, ...migrationSnapshot(), migrationStatus: state.status }
+    } catch (err) {
+      return migrationError(reply, err, 'selftest_failed')
+    }
+  })
+
+  app.post('/api/migration/preview', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const { sourceUid, targetUid } = request.body || {}
+    try {
+      const state = await runPreview({ sourceUid, targetUid })
+      return { ok: true, ...migrationSnapshot(), migrationStatus: state.status }
+    } catch (err) {
+      return migrationError(reply, err, 'preview_failed')
+    }
+  })
+
+  app.post('/api/migration/apply', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const { sourceUid, targetUid, confirm } = request.body || {}
+    if (confirm !== true) {
+      return reply
+        .code(400)
+        .send({ error: 'confirm: true is required to apply a migration', code: 'confirm_required' })
+    }
+    try {
+      const state = await applyMigration({ sourceUid, targetUid })
+      return {
+        ok: true,
+        ...migrationSnapshot(),
+        backups: await listBackups(),
+        migrationStatus: state.status,
+      }
+    } catch (err) {
+      return migrationError(reply, err, 'apply_failed')
+    }
+  })
+
+  app.post('/api/migration/rollback', async (request, reply) => {
+    if (!requireToken(request, reply)) return
+    const { backupId } = request.body || {}
+    try {
+      const state = await rollbackMigration({ backupId })
+      return {
+        ok: true,
+        ...migrationSnapshot(),
+        backups: await listBackups(),
+        migrationStatus: state.status,
+      }
+    } catch (err) {
+      return migrationError(reply, err, 'rollback_failed')
     }
   })
 }
