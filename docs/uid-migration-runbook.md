@@ -42,17 +42,31 @@ the world-save mounted `:rw` (see `docker-compose.yml`).
 |---|---|---|
 | Player character | `Level.sav` → `CharacterSaveParameterMap` key `PlayerUId` | source → target (re-key) |
 | Owned Pals | `Level.sav` → same map, `OwnerPlayerUId` / `OldOwnerPlayerUIds` | source → target |
-| Guild + base ownership | `Level.sav` → `GroupSaveDataMap` (`players[].player_uid`, `individual_character_handle_ids[].guid`, `last_guild_name_modifier_player_uid`) | source → target |
+| Fresh target character | `Level.sav` → `CharacterSaveParameterMap` entry keyed by the target UID | removed (overwritten by the source) before the re-key |
+| Guild + base ownership | `Level.sav` → `GroupSaveDataMap` raw bytes (`players[].player_uid`, handle `guid`s, `last_guild_name_modifier_player_uid`) | source → target, at the byte level |
 | Inventory / tech / recipes | `Players/<source>.sav` | patch internal `PlayerUId` (keep `InstanceId`) → write as `Players/<target>.sav`; live source file removed |
 
-The migration decodes only `CharacterSaveParameterMap` + `GroupSaveDataMap` and
-re-points **every** reference to the source PlayerUId within them (a PlayerUId is a
-unique GUID distinct from any InstanceId, so InstanceIds are preserved and the
-character re-key falls out of the same pass). `MapObjectSaveData` / `GuildSecurity`
-stay **undecoded (raw bytes)** so they round-trip verbatim — a full decode hits EOF
-on 0.6+ (same constraint as the parser). This 0.6+ format has **no
-`admin_player_uid`** field (unlike the older format the xNul script targeted),
-which is exactly why we re-point by scope rather than by hard-coded field paths.
+The migration decodes **only `CharacterSaveParameterMap`** and re-points every
+reference to the source PlayerUId within it — the character re-key plus pal
+`OwnerPlayerUId` / `OldOwnerPlayerUIds` all fall out of one pass (a PlayerUId is a
+unique GUID distinct from any InstanceId, so InstanceIds are preserved). Before the
+re-key it drops the target UID's throwaway fresh-join character so the map never
+holds two characters for the target.
+
+`GroupSaveDataMap` is **not decoded** — this 0.6+ save's guild `player_info`
+layout desyncs the fork's `group.py` decoder and reads past EOF (the same reason
+`extract_bases.py` never decodes it). Instead the guild's raw bytes are edited
+directly: the source PlayerUId's 16 in-stream bytes are byte-replaced with the
+target's (length-preserving, so no size fixups), which catches guild members,
+character-handle ids, and the last-name-modifier without touching InstanceIds.
+`MapObjectSaveData` / `GuildSecurity` likewise stay raw and round-trip verbatim.
+The round-trip self-test therefore only needs to prove the `CharacterSaveParameterMap`
+re-serialize — the sole decode/re-encode in the whole migration.
+
+**Known benign artifact:** the target's original empty solo-guild remains in
+`GroupSaveDataMap` listing the target UID, now orphaned (the character's `group_id`
+points at the source's real guild). It's harmless and Palworld prunes empty guilds;
+removing it would require a non-length-preserving edit, so the tool leaves it.
 
 ## Why a custom tool and not magicbear / xNul directly
 

@@ -23,16 +23,16 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-# The migration only needs these two decoders:
+# The migration decodes exactly ONE map:
 #   - CharacterSaveParameterMap: player character + owned pals (PlayerUId,
 #     OwnerPlayerUId, OldOwnerPlayerUIds).
-#   - GroupSaveDataMap: guild membership + admin + character handle ids.
-# Everything else (notably MapObjectSaveData, whose GuildSecurity module makes a
-# full decode die on 0.6+) is left undecoded so it round-trips as raw bytes.
-MIGRATE_KEYS = (
-    ".worldSaveData.CharacterSaveParameterMap.Value.RawData",
-    ".worldSaveData.GroupSaveDataMap",
-)
+# GroupSaveDataMap is deliberately NOT decoded: this 0.6+ save's guild
+# `player_info` layout desyncs the fork's group.py decoder (reads past EOF), the
+# same reason extract_bases.py never decodes it. The migration re-points guild
+# UIDs at the raw-byte level instead (see migrate_uid.py), so the group map
+# round-trips as verbatim bytes here. Everything else (notably MapObjectSaveData,
+# whose GuildSecurity module also dies on a full 0.6+ decode) is likewise raw.
+MIGRATE_KEYS = (".worldSaveData.CharacterSaveParameterMap.Value.RawData",)
 
 
 def fail(code: str, message: str, *, details: str | None = None, exit_code: int = 2) -> None:
